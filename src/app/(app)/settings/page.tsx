@@ -59,6 +59,7 @@ export default function SettingsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<"idle" | "working" | "ready">("idle");
 
   async function saveProfile(e: FormEvent) {
@@ -277,11 +278,20 @@ export default function SettingsPage() {
         description="Your account, resume, every recording, transcript, score and piece of feedback will be deleted permanently. Partners keep only the feedback they wrote about you."
       >
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             if (confirmText !== "DELETE") return;
             setDeleting(true);
-            window.setTimeout(() => router.push("/signup"), 1100);
+            setDeleteError(null);
+            try {
+              await apiFetch("/api/account", { method: "DELETE" });
+              router.push("/signup");
+            } catch (err) {
+              setDeleting(false);
+              setDeleteError(
+                err instanceof Error ? err.message : "Your account wasn't deleted. Try again.",
+              );
+            }
           }}
           className="space-y-5"
         >
@@ -296,12 +306,18 @@ export default function SettingsPage() {
             autoComplete="off"
             autoCapitalize="characters"
           />
-          <div className="flex flex-wrap justify-end gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {deleteError ? (
+              <span role="alert" className="text-[0.875rem] font-semibold text-stamp">
+                {deleteError}
+              </span>
+            ) : null}
             <Button
               variant="ghost"
               onClick={() => {
                 setDeleteOpen(false);
                 setConfirmText("");
+                setDeleteError(null);
               }}
             >
               Keep my account

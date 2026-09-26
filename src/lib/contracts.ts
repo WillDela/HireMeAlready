@@ -118,8 +118,15 @@ export const CreateInterviewInput = z.object({
   company: z.string().min(1),
   jobDescription: z.string().optional(),
   grounded: z.boolean().default(false), // scrape the web for questions reported at this company
+  // The questions the user already previewed and edited on /practice/ai. When omitted,
+  // the server generates them.
+  questions: z.array(GeneratedQuestion).min(1).max(20).optional(),
 });
 export type CreateInterviewInput = z.infer<typeof CreateInterviewInput>;
+
+// PATCH /api/interviews/:id (AI mode): the ElevenLabs conversation, once connected.
+export const UpdateInterviewInput = z.object({ elevenConversation: z.string().min(1) });
+export type UpdateInterviewInput = z.infer<typeof UpdateInterviewInput>;
 
 // POST /api/ai/questions: the AI practice setup form.
 export const QuestionSetInput = z.object({
@@ -258,49 +265,55 @@ export type UploadUrlResponse = { uploadUrl: string; storageKey: string; resumeI
 // POST /api/ai/questions
 export type QuestionSetResponse = { questions: GeneratedQuestion[] };
 
+// POST /api/interviews
+export type CreateInterviewResponse = { id: string };
+
 // POST /api/ai/signed-url
 export type AiSessionResponse = {
   signedUrl: string;
   dynamicVariables: Record<string, string>;
 };
 
-export type ParticipantSummary = {
-  userId: string;
-  name: string;
-  role: InterviewRole;
-  // Only present when that user's Profile.shareContact is true.
-  contact?: { email: string; linkedinUrl?: string };
+// ---------- Friends ----------
+
+export const SendFriendRequestInput = z.object({ userId: z.string().min(1) });
+export type SendFriendRequestInput = z.infer<typeof SendFriendRequestInput>;
+
+export const RespondFriendRequestInput = z.object({ status: z.enum(["ACCEPTED", "DECLINED"]) });
+export type RespondFriendRequestInput = z.infer<typeof RespondFriendRequestInput>;
+
+export type PersonSummary = { id: string; name: string; initials: string; headline: string };
+
+// GET /api/friends
+export type FriendsResponse = {
+  friends: (PersonSummary & { friendshipId: string; sharedInterviews: number })[];
+  incoming: (PersonSummary & { requestId: string; sentAt: string })[];
+  outgoing: (PersonSummary & { requestId: string; sentAt: string })[];
 };
 
-// GET /api/interviews (history list)
-export type InterviewListItem = {
-  id: string;
-  mode: InterviewMode;
-  status: InterviewStatus;
-  jobTitle: string | null;
-  company: string | null;
-  startedAt: string | null;
-  endedAt: string | null;
-  myRole: InterviewRole;
-  partnerName: string | null; // null for AI interviews
-  overallScore: number | null;
+// GET /api/friends/search?q=
+export type PersonSearchResult = PersonSummary & {
+  status: "none" | "incoming" | "outgoing" | "friends";
 };
 
-// GET /api/interviews/:id
-export type InterviewDetail = {
+// ---------- Admin ----------
+
+export const ReportStatus = z.enum(["OPEN", "IN_REVIEW", "ACTIONED", "DISMISSED"]);
+export type ReportStatus = z.infer<typeof ReportStatus>;
+
+export const UpdateReportStatusInput = z.object({ status: ReportStatus });
+export type UpdateReportStatusInput = z.infer<typeof UpdateReportStatusInput>;
+
+// GET /api/admin/reports
+export type AdminReportItem = {
   id: string;
-  mode: InterviewMode;
-  status: InterviewStatus;
-  jobTitle: string | null;
-  company: string | null;
-  startedAt: string | null;
-  endedAt: string | null;
-  participants: ParticipantSummary[];
-  questions: GeneratedQuestion[];
-  transcript: TranscriptLine[];
-  transcriptStatus: JobStatus;
-  analysis: { status: JobStatus; result: AnalysisResult | null } | null;
-  feedback: (FeedbackInput & { authorName: string; createdAt: string })[];
+  reporterName: string;
+  reportedName: string;
+  reason: string;
+  details: string | null;
+  createdAt: string;
+  interviewId: string;
+  status: ReportStatus;
 };
 
 // ---------- Helpers ----------

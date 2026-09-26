@@ -1,93 +1,50 @@
-import { GoogleGenAI } from "@google/genai";
+import { createPartFromBase64, createPartFromText, createUserContent } from "@google/genai";
 import { z } from "zod";
 import {
-  type AnalysisResult,
+  AnalysisResult,
   type GeneratedQuestion,
   ParsedResume,
   QuestionCategory,
   QuestionSource,
   type TranscriptLine,
 } from "@/lib/contracts";
-import { fixtureAnalysis } from "@/lib/gemini/fixtures";
+import { client, geminiEmbedModel, geminiModel, parseJsonResponse, toResponseSchema, withRetry } from "@/lib/gemini/client";
 import { type ScrapedPage, scrapeSearch } from "@/lib/scrape";
 
-// Owner: Stream C. parseResume, embedText and generateQuestions call Gemini; the rest are still STUBS
-// returning fixtures so Streams B and D can build against the final signatures. Stream C
-// replaces each stub body with a real Gemini call without changing the signature. Model
-// names come from GEMINI_MODEL and GEMINI_EMBED_MODEL.
-
-let client: GoogleGenAI | undefined;
-function gemini() {
-  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
-  client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  return client;
-}
-
-const model = () => process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite";
-const embedModel = () => process.env.GEMINI_EMBED_MODEL ?? "gemini-embedding-001";
-
-/** Retries Gemini's transient "busy" errors (429, 500, 503) with backoff. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
-  for (let i = 1; ; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      const transient = status === 429 || status === 500 || status === 503;
-      if (!transient || i >= attempts) throw err;
-      await new Promise((r) => setTimeout(r, 1000 * 2 ** i)); // 2s, 4s, 8s
-    }
-  }
-}
-
-/** JSON Schema for `responseJsonSchema`, minus the `$schema` key Gemini doesn't accept. */
-function responseSchema(schema: z.ZodType) {
-  const json = z.toJSONSchema(schema);
-  delete json.$schema;
-  return json;
-}
-
-const PARSE_RESUME_PROMPT = `Extract this resume into the JSON schema.
+// Owner: Stream C. Model names come from GEMINI_MODEL and GEMINI_EMBED_MODEL.
+const RESUME_PROMPT = `Extract this resume into the JSON schema.
 - Copy facts as written; don't invent employers, dates, or skills.
 - summary: 1-2 sentences in the third person about who this candidate is and what they're strongest at.
 - skills: concrete technologies, tools, and languages, most prominent first, at most 20.
 - experience: most recent first; bullets copied or lightly condensed.
-- headline and targetRole are your best inference from the whole resume.
+- headline: a one-line professional headline, e.g. "CS student at FIU building web apps".
+- targetRole and linkedinUrl are your best inference from the whole resume.
 - Omit optional fields you can't find.`;
 
 export async function parseResume(pdf: Buffer): Promise<ParsedResume> {
-  const res = await withRetry(() =>
-    gemini().models.generateContent({
-      model: model(),
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType: "application/pdf", data: pdf.toString("base64") } },
-            { text: PARSE_RESUME_PROMPT },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: responseSchema(ParsedResume),
-      },
+  const response = await withRetry(() =>
+    client().models.generateContent({
+      model: geminiModel(),
+      contents: createUserContent([
+        createPartFromText(RESUME_PROMPT),
+        createPartFromBase64(pdf.toString("base64"), "application/pdf"),
+      ]),
+      config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(ParsedResume) },
     }),
   );
-  if (!res.text) throw new Error("Gemini returned no resume JSON");
-  return ParsedResume.parse(JSON.parse(res.text));
+  return parseJsonResponse(ParsedResume, response.text);
 }
 
 /** 768-dimensional embedding (gemini-embedding-001 with outputDimensionality 768). */
 export async function embedText(text: string): Promise<number[]> {
-  const res = await withRetry(() =>
-    gemini().models.embedContent({
-      model: embedModel(),
+  const response = await withRetry(() =>
+    client().models.embedContent({
+      model: geminiEmbedModel(),
       contents: text,
       config: { outputDimensionality: 768 },
     }),
   );
-  const values = res.embeddings?.[0]?.values;
+  const values = response.embeddings?.[0]?.values;
   if (!values) throw new Error("Gemini returned no embedding");
   return values;
 }
@@ -173,17 +130,17 @@ async function researchCompany(company: string, jobTitle: string): Promise<Compa
   if (pages.length === 0) return { reported: [], facts: [] };
 
   const res = await withRetry(() =>
-    gemini().models.generateContent({
-      model: model(),
+    client().models.generateContent({
+      model: geminiModel(),
       contents: extractPrompt(company, jobTitle, pages),
       config: {
         responseMimeType: "application/json",
-        responseJsonSchema: responseSchema(ScrapeExtract),
+        responseJsonSchema: toResponseSchema(ScrapeExtract),
       },
     }),
   );
   if (!res.text) return { reported: [], facts: [] };
-  const extract = ScrapeExtract.parse(JSON.parse(res.text));
+  const extract = parseJsonResponse(ScrapeExtract, res.text);
 
   const kinds = new Map(extract.pages.map((p) => [p.pageId, p.kind]));
   const normalized = pages.map((p) => normalize(p.text));
@@ -274,19 +231,18 @@ export async function generateQuestions(input: GenerateQuestionsInput): Promise<
   }
 
   const res = await withRetry(() =>
-    gemini().models.generateContent({
-      model: model(),
+    client().models.generateContent({
+      model: geminiModel(),
       contents: questionsPrompt(input, research),
       config: {
         responseMimeType: "application/json",
-        responseJsonSchema: responseSchema(QuestionPlan),
+        responseJsonSchema: toResponseSchema(QuestionPlan),
       },
     }),
   );
-  if (!res.text) throw new Error("Gemini returned no questions");
 
   const used = new Set<number>();
-  return QuestionPlan.parse(JSON.parse(res.text))
+  return parseJsonResponse(QuestionPlan, res.text)
     .questions.map(({ reportedId, ...q }): GeneratedQuestion => {
       const reported = reportedId === undefined || used.has(reportedId) ? undefined : research.reported[reportedId];
       if (!reported) return q;
@@ -299,8 +255,22 @@ export async function generateQuestions(input: GenerateQuestionsInput): Promise<
 
 export type TranscribedSegment = { startMs: number; endMs: number; text: string };
 
-export async function transcribeAudio(_audio: Buffer, _mimeType: string): Promise<TranscribedSegment[]> {
-  return [{ startMs: 0, endMs: 4000, text: "(stub transcript)" }];
+const TranscribedSegments = z.array(z.object({ startMs: z.int(), endMs: z.int(), text: z.string() }));
+
+export async function transcribeAudio(audio: Buffer, mimeType: string): Promise<TranscribedSegment[]> {
+  const response = await withRetry(() =>
+    client().models.generateContent({
+      model: geminiModel(),
+      contents: createUserContent([
+        createPartFromText(
+          "Transcribe this interview recording. Split it into segments at natural pauses or sentence breaks, giving each segment's start and end time in milliseconds from the start of the recording.",
+        ),
+        createPartFromBase64(audio.toString("base64"), mimeType),
+      ]),
+      config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(TranscribedSegments) },
+    }),
+  );
+  return parseJsonResponse(TranscribedSegments, response.text);
 }
 
 export type AnalyzeInterviewInput = {
@@ -310,6 +280,27 @@ export type AnalyzeInterviewInput = {
   feedback?: string;
 };
 
-export async function analyzeInterview(_input: AnalyzeInterviewInput): Promise<AnalysisResult> {
-  return fixtureAnalysis;
+export async function analyzeInterview(input: AnalyzeInterviewInput): Promise<AnalysisResult> {
+  const { transcript, questions, jobTitle, feedback } = input;
+  const transcriptText = transcript.map((line) => `${line.speaker}: ${line.text}`).join("\n") || "(no transcript captured)";
+  const questionsText = questions.map((q, i) => `${i + 1}. ${q.text}`).join("\n") || "(no questions recorded)";
+
+  const prompt = [
+    `You are an interview coach reviewing a mock interview transcript for a "${jobTitle}" role.`,
+    `Questions asked:\n${questionsText}`,
+    `Transcript:\n${transcriptText}`,
+    feedback ? `The human interviewer also wrote this feedback about the candidate:\n${feedback}` : null,
+    `Write a structured assessment: a short overall summary, an overall score (0-100), scores (0-100 each) for communication, structure, technical depth, and relevance, 2-4 strengths, 2-4 improvements, and one entry per question above (in the same order) with a one-sentence summary of the answer, brief feedback, and a 0-100 score. Base every score and comment only on what's in the transcript.`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const response = await withRetry(() =>
+    client().models.generateContent({
+      model: geminiModel(),
+      contents: prompt,
+      config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(AnalysisResult) },
+    }),
+  );
+  return parseJsonResponse(AnalysisResult, response.text);
 }
