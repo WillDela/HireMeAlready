@@ -47,3 +47,11 @@ Shared interfaces live in `src/lib/contracts.ts` (zod schemas + types). `src/lib
 - Validate request bodies with the zod schemas from `contracts.ts`.
 - `resume.embedding` is a pgvector column Prisma can't read or write; use `src/lib/vector.ts`.
 - Work on feature branches and open PRs into `main`.
+
+## Droplet
+
+DigitalOcean droplet `104.131.187.142` (Ubuntu 24.04, 2 vCPU / 4 GB / 80 GB). Docker Engine and the Compose plugin are installed, and container logs rotate at 10 MB × 3.
+
+The `ufw` firewall allows only: 22 (SSH), 80/443 (Caddy), 3478 tcp+udp and 5349 tcp (TURN), 49160–49200 udp (TURN relay; match `min-port`/`max-port` in coturn).
+
+**Docker-published ports bypass ufw.** In `docker-compose.yml`, only Caddy should use `ports:` (80/443). Every other service uses `expose:` and is reached through Caddy on the Compose network, and coturn uses `network_mode: host`. Writing `ports: ["3000:3000"]` would expose that service to the internet even though ufw doesn't allow it.
