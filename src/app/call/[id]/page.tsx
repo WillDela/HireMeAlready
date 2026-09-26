@@ -3,7 +3,8 @@
 import { notFound, useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { WifiOff } from "lucide-react";
-import { aiCaptions, callSessions, candidateResume, currentUser, suggestedQuestions } from "@/lib/mock";
+import { aiCaptions, callSessions, candidateResume, suggestedQuestions } from "@/lib/mock";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
 import { AiOrb, type AiState } from "@/components/call/AiOrb";
@@ -51,6 +52,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params);
   const session = callSessions[id];
   const router = useRouter();
+  const currentUser = useCurrentUser();
   const forced = useForcedState();
   const [role] = useRole();
   const [micOn, setMicOn] = useState(true);

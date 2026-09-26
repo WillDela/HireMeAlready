@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Download, Monitor, Moon, Sun, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { currentUser, type Role } from "@/lib/mock";
+import { type Role } from "@/lib/mock";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { useMockResource } from "@/lib/mock-state";
 import { useRole, useTheme, type ThemeChoice } from "@/lib/prefs";
 import { Button } from "@/components/ui/Button";
@@ -35,6 +36,7 @@ const themes: { value: ThemeChoice; label: string; hint: string; icon: typeof Su
 ];
 
 export default function SettingsPage() {
+  const currentUser = useCurrentUser();
   const router = useRouter();
   const { status, retry } = useMockResource(currentUser);
   const [role, setRole] = useRole();

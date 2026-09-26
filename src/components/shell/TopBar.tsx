@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Bell, FileText, Flag, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { currentUser, notifications as initialNotifications } from "@/lib/mock";
+import { notifications as initialNotifications } from "@/lib/mock";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
+import { signOut } from "@/lib/auth-client";
 import { Avatar } from "@/components/ui/Avatar";
 import { Popover } from "@/components/ui/Popover";
 import { EmptyFolder } from "@/components/ui/States";
@@ -12,6 +15,8 @@ import { RoleToggle } from "./RoleToggle";
 import { Wordmark } from "./Wordmark";
 
 export function TopBar() {
+  const currentUser = useCurrentUser();
+  const router = useRouter();
   const [items, setItems] = useState(initialNotifications);
   const unread = items.filter((n) => n.unread).length;
 
@@ -109,7 +114,6 @@ export function TopBar() {
                     { href: "/settings", label: "Settings", icon: Settings },
                     { href: "/resume", label: "Your resume", icon: FileText },
                     ...(currentUser.isAdmin ? [{ href: "/admin/reports", label: "Admin: reports", icon: Flag }] : []),
-                    { href: "/login", label: "Sign out", icon: LogOut },
                   ].map(({ href, label, icon: Icon }) => (
                     <li key={href}>
                       <Link
@@ -122,6 +126,21 @@ export function TopBar() {
                       </Link>
                     </li>
                   ))}
+                  <li>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        close();
+                        await signOut();
+                        router.push("/login");
+                        router.refresh();
+                      }}
+                      className="flex min-h-11 w-full items-center gap-3 rounded-[4px] px-3 text-[0.9375rem] font-medium hover:bg-paper-2"
+                    >
+                      <LogOut size={18} aria-hidden="true" className="text-ink-2" />
+                      Sign out
+                    </button>
+                  </li>
                 </ul>
               </div>
             )}

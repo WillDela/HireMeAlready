@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Check, Mic, MicOff, TriangleAlert, Video, VideoOff, Volume2, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { currentUser, devices } from "@/lib/mock";
+import { devices } from "@/lib/mock";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { Button } from "@/components/ui/Button";
 import { SelectField } from "@/components/ui/Field";
 import { Spinner } from "@/components/ui/Spinner";
@@ -95,6 +96,7 @@ export function DeviceCheck({
   joinLabel?: string;
   joining?: boolean;
 }) {
+  const currentUser = useCurrentUser();
   const [cameraOn, setCameraOn] = useState(true);
   const [micOn, setMicOn] = useState(true);
   const [testing, setTesting] = useState(false);

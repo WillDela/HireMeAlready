@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Flag } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { currentUser } from "@/lib/mock";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { navItems } from "./nav";
 import { Wordmark } from "./Wordmark";
 
 /** Desktop: the file drawer down the left edge. */
 export function Sidebar() {
+  const currentUser = useCurrentUser();
   const pathname = usePathname();
 
   return (

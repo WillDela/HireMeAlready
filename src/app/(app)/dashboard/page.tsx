@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { currentUser, friendRequests, getInterview, lastInterview } from "@/lib/mock";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
+import { friendRequests, getInterview, lastInterview } from "@/lib/mock";
 import { useMockResource } from "@/lib/mock-state";
 import { FriendRow } from "@/components/FriendRow";
 import { TypeTag } from "@/components/InterviewTable";
@@ -113,6 +114,7 @@ function Requests({ empty }: { empty: boolean }) {
 }
 
 export default function DashboardPage() {
+  const currentUser = useCurrentUser();
   const { status, retry } = useMockResource(lastInterview);
 
   return (
