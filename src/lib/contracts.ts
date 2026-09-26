@@ -237,6 +237,18 @@ export type PeerSession = {
 export const PeerEventInput = z.object({ event: z.enum(["connected", "left"]) });
 export type PeerEventInput = z.infer<typeof PeerEventInput>;
 
+// GET /api/interviews/:id/feedback, the wrap-up page after a peer interview. POST takes
+// a FeedbackInput (interviewer only) and returns this again.
+export type PeerWrapUp = {
+  interviewId: string;
+  status: InterviewStatus;
+  role: InterviewRole;
+  jobTitle: string | null;
+  company: string | null;
+  partner: { name: string; initials: string };
+  feedbackSent: boolean; // the interviewer has rated the candidate
+};
+
 // GET /api/turn-credentials
 export type IceServersResponse = { iceServers: RTCIceServer[]; ttl: number };
 

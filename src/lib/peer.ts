@@ -1,5 +1,5 @@
 import { HttpError } from "@/lib/api";
-import type { PeerEventInput, PeerSession } from "@/lib/contracts";
+import type { FeedbackInput, PeerEventInput, PeerSession, PeerWrapUp } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { partnerStillThere, touchMatch } from "@/lib/matching";
 import { initialsFor, toQuestionView, toResumeView } from "@/lib/views";
@@ -89,4 +89,46 @@ export async function recordPeerEvent(interviewId: string, userId: string, { eve
   }
   const { status } = await db.interview.findUniqueOrThrow({ where: { id: interviewId }, select: { status: true } });
   return { status };
+}
+
+/** GET /api/interviews/:id/feedback: what the wrap-up page shows after a peer interview. */
+export async function getPeerWrapUp(interviewId: string, userId: string): Promise<PeerWrapUp> {
+  const me = await myParticipation(interviewId, userId);
+  const interview = await db.interview.findUniqueOrThrow({
+    where: { id: interviewId },
+    include: { participants: { include: { user: true } }, feedback: { select: { id: true }, take: 1 } },
+  });
+  const partner = interview.participants.find((p) => p.userId !== userId);
+  if (interview.mode !== "PEER" || !partner) throw new HttpError(404, "Interview not found");
+  return {
+    interviewId,
+    status: interview.status,
+    role: me.role,
+    jobTitle: interview.jobTitle,
+    company: interview.company,
+    partner: { name: partner.user.name, initials: initialsFor(partner.user.name, partner.user.email) },
+    feedbackSent: interview.feedback.length > 0,
+  };
+}
+
+/**
+ * POST /api/interviews/:id/feedback: the interviewer rates the candidate, once the call
+ * has started. Sending again replaces the earlier ratings. The candidate reads it in
+ * their interview file (see getInterviewDetail).
+ */
+export async function submitPeerFeedback(interviewId: string, userId: string, input: FeedbackInput) {
+  const me = await myParticipation(interviewId, userId);
+  if (me.role !== "INTERVIEWER") throw new HttpError(403, "Only the interviewer leaves feedback");
+  const interview = await db.interview.findUniqueOrThrow({ where: { id: interviewId }, include: { participants: true } });
+  const candidate = interview.participants.find((p) => p.role === "INTERVIEWEE");
+  if (interview.mode !== "PEER" || !candidate) throw new HttpError(404, "Interview not found");
+  if (interview.status === "PENDING" || interview.status === "ABANDONED") {
+    throw new HttpError(409, "This interview never started, so there's nothing to rate");
+  }
+  await db.feedback.upsert({
+    where: { interviewId_authorId: { interviewId, authorId: userId } },
+    create: { interviewId, authorId: userId, subjectId: candidate.userId, ...input },
+    update: input,
+  });
+  return getPeerWrapUp(interviewId, userId);
 }
