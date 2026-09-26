@@ -2,9 +2,8 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { VideoTile } from "@/components/call/video-tile";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/Button";
+import { TextField } from "@/components/ui/Field";
 import type { IceServersResponse } from "@/lib/contracts";
 import { usePeerCall } from "@/lib/rtc/use-peer-call";
 
@@ -62,7 +61,7 @@ export function RtcTest({ initialRoom }: { initialRoom: string }) {
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4">
       <div>
         <h1 className="text-xl font-semibold">WebRTC test</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-3">
           Open this page on two devices on different networks (e.g. laptop on Wi-Fi, phone on cellular), join
           the same room, and pick opposite sides.
         </p>
@@ -70,47 +69,48 @@ export function RtcTest({ initialRoom }: { initialRoom: string }) {
 
       {!side ? (
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="room">Room</Label>
-            <Input id="room" value={room} onChange={(e) => setRoom(cleanRoom(e.target.value))} />
-            <p className="break-all text-xs text-muted-foreground">Other device: {shareUrl}</p>
-          </div>
+          <TextField
+            label="Room"
+            value={room}
+            onChange={(e) => setRoom(cleanRoom(e.target.value))}
+            hint={<span className="break-all">Other device: {shareUrl}</span>}
+          />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={forceRelay} onChange={(e) => setForceRelay(e.target.checked)} />
             Force TURN relay (proves our TURN server works)
           </label>
           <div className="flex gap-2">
             <Button onClick={() => join("a")}>Join as A (calls)</Button>
-            <Button variant="outline" onClick={() => join("b")}>
+            <Button variant="secondary" onClick={() => join("b")}>
               Join as B (answers)
             </Button>
           </div>
-          {joinError && <p className="text-sm text-destructive">{joinError}</p>}
+          {joinError && <p className="text-sm text-stamp">{joinError}</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-4">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-            <dt className="text-muted-foreground">Room</dt>
+            <dt className="text-ink-3">Room</dt>
             <dd>
               {room} (you are {side.toUpperCase()}
               {forceRelay ? ", relay only" : ""})
             </dd>
-            <dt className="text-muted-foreground">State</dt>
+            <dt className="text-ink-3">State</dt>
             <dd className="font-medium">{call.state}</dd>
-            <dt className="text-muted-foreground">Path</dt>
+            <dt className="text-ink-3">Path</dt>
             <dd>{call.connectionType ? (CONNECTION_LABELS[call.connectionType] ?? call.connectionType) : "—"}</dd>
           </dl>
           {call.state === "waiting" && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-3">
               Waiting for side {side === "a" ? "B" : "A"} to join room {room}...
             </p>
           )}
-          {call.error && <p className="text-sm text-destructive">{call.error}</p>}
+          {call.error && <p className="text-sm text-stamp">{call.error}</p>}
           <div className="grid gap-4 sm:grid-cols-2">
             <VideoTile stream={call.localStream} label="You" muted mirrored />
             <VideoTile stream={call.remoteStream} label="Them" />
           </div>
-          <Button variant="destructive" onClick={leave} className="self-start">
+          <Button variant="danger" onClick={leave} className="self-start">
             Leave
           </Button>
         </div>

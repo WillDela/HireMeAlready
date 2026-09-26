@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/cn";
 
 export function VideoTile({
   stream,
@@ -24,7 +24,7 @@ export function VideoTile({
   }, [stream]);
 
   return (
-    <div className={cn("relative aspect-video overflow-hidden rounded-lg bg-muted", className)}>
+    <div className={cn("relative aspect-video overflow-hidden rounded-lg bg-night", className)}>
       <video
         ref={ref}
         autoPlay
@@ -33,7 +33,7 @@ export function VideoTile({
         className={cn("size-full object-cover", mirrored && "-scale-x-100")}
       />
       {!stream && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
           No video yet
         </div>
       )}
