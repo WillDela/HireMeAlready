@@ -46,7 +46,8 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
     include: {
       ...interviewInclude,
       segments: { orderBy: { startMs: "asc" } },
-      feedback: { where: { subjectId: userId }, include: { author: true }, take: 1 },
+      // Feedback about you (as the candidate) or by you (as the interviewer); picked below.
+      feedback: { where: { OR: [{ subjectId: userId }, { authorId: userId }] }, include: { author: true } },
     },
   });
   if (!iv) throw new HttpError(404, "Interview not found");
@@ -81,7 +82,7 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
       })
     : [];
 
-  const feedback = iv.feedback[0];
+  const feedback = iv.feedback.find((f) => (me.role === "INTERVIEWER" ? f.authorId : f.subjectId) === userId);
   return {
     ...summary,
     summary:
