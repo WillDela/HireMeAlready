@@ -1,14 +1,15 @@
 "use client";
 
 import { notFound, useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { WifiOff } from "lucide-react";
-import { callSessions, candidateResume, suggestedQuestions } from "@/lib/mock";
+import { candidateResume, suggestedQuestions } from "@/lib/mock";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
 import { apiFetch } from "@/lib/use-api";
-import { AiInterviewer } from "@/components/call/AiInterviewer";
+import { useCallSession } from "@/lib/use-call-session";
+import { AiInterviewer, type AiInterviewerHandle } from "@/components/call/AiInterviewer";
 import { CallControls } from "@/components/call/CallControls";
 import { InterviewerSidePanel } from "@/components/call/InterviewerSidePanel";
 import { ReportDialog } from "@/components/call/ReportDialog";
@@ -30,9 +31,11 @@ function useElapsed(running: boolean) {
 
 export default function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const session = callSessions[id];
   const router = useRouter();
   const currentUser = useCurrentUser();
+  const { status, session } = useCallSession(id, currentUser.id);
+  const aiRef = useRef<AiInterviewerHandle>(null);
+  const endedRef = useRef(false);
   const forced = useForcedState();
   const [role] = useRole();
   const [micOn, setMicOn] = useState(true);
@@ -48,7 +51,16 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
     if (window.matchMedia("(max-width: 1023px)").matches) setPanelOpen(false);
   }, []);
 
-  if (!session) notFound();
+  if (status === "missing") notFound();
+  if (!session) {
+    return (
+      <div role="status" className="surface-night grid h-dvh place-items-center">
+        <p className="flex items-center gap-3 text-[1.0625rem] font-semibold">
+          <Spinner size={22} /> Opening your interview…
+        </p>
+      </div>
+    );
+  }
 
   const isAi = session.type === "ai";
   const isInterviewer = !isAi && role === "interviewer";
@@ -57,10 +69,17 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
     : { name: session.partner.name, initials: session.partner.initials };
   const panelId = "candidate-file";
 
+  // End button, Report > leave, or the AI interviewer hanging up after the last question.
   function end() {
-    // Best-effort: triggers transcript + analysis on the server. Non-blocking so the
-    // UI never waits on it, and harmless if the interview API isn't wired up yet.
-    apiFetch(`/api/interviews/${id}/end`, { method: "POST" }).catch(() => {});
+    if (endedRef.current) return;
+    endedRef.current = true;
+    // Close the voice session first so ElevenLabs starts processing the transcript that
+    // /end's finalize step pulls.
+    aiRef.current?.end();
+    // Non-blocking: finalizing runs on the server, and the wrap-up page polls for it.
+    apiFetch(`/api/interviews/${id}/end`, { method: "POST" }).catch((err) =>
+      console.error("Couldn't end the interview:", err),
+    );
     router.push(`/call/${id}/wrap-up`);
   }
 
@@ -88,7 +107,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
       <div className="flex min-h-0 flex-1">
         <main id="main" className="relative min-w-0 flex-1 px-3 pb-2 sm:px-4">
           {isAi ? (
-            <AiInterviewer interviewId={id} active={connected} />
+            <AiInterviewer interviewId={id} active={connected} muted={!micOn} onAgentEnded={end} handle={aiRef} />
           ) : (
             <VideoTile
               name={partner.name}

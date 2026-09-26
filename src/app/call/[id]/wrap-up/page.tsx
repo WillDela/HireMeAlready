@@ -5,9 +5,13 @@ import { notFound, useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { callSessions, candidateResume } from "@/lib/mock";
+import type { InterviewDetail } from "@/lib/contracts";
+import { candidateResume } from "@/lib/mock";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { useApiResource } from "@/lib/use-api";
+import { useCallSession } from "@/lib/use-call-session";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { FeedbackForm } from "@/components/FeedbackForm";
 import { Wordmark } from "@/components/shell/Wordmark";
 import { ButtonLink } from "@/components/ui/Button";
@@ -18,20 +22,75 @@ import { StatePreview } from "@/components/ui/StatePreview";
 
 const processingSteps = ["Transcribing the recording", "Scoring your answers", "Writing your feedback"];
 
-function Processing({ historyId, hold }: { historyId: string; hold: boolean }) {
-  const router = useRouter();
+/** Where the real finalize pipeline is: 0 transcript, 1 analysis, 3 done. */
+function stepOf(detail: InterviewDetail): number {
+  if (detail.transcriptStatus !== "READY") return 0;
+  if (detail.analysis?.status !== "READY") return 1;
+  return processingSteps.length;
+}
+
+const hasFailed = (d: InterviewDetail) => d.transcriptStatus === "FAILED" || d.analysis?.status === "FAILED";
+const isSettled = (d: InterviewDetail) => hasFailed(d) || d.analysis?.status === "READY";
+
+/** Polls the interview until its transcript and analysis are filed (or fail). */
+function LiveProcessing({ id, hold }: { id: string; hold: boolean }) {
+  const { data, status, retry } = useApiResource<InterviewDetail>(`/api/interviews/${id}`, {
+    pollWhile: (d) => !isSettled(d),
+  });
+
+  if (status === "error" && !data) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <ErrorReturned title="We couldn't check on this interview" onRetry={retry}>
+          Your interview is saved. Check your connection and try again.
+        </ErrorReturned>
+      </div>
+    );
+  }
+  if (data && hasFailed(data)) {
+    const answered = data.transcript.some((line) => line.speaker === "INTERVIEWEE");
+    return data.transcriptStatus === "READY" && !answered ? (
+      <div className="sheet mx-auto max-w-lg">
+        <EmptyFolder title="Nothing to score" action={<ButtonLink href="/practice/ai">Try again</ButtonLink>}>
+          We didn&apos;t catch any answers in this interview, so there&apos;s nothing to score. Check your
+          microphone and give it another go.
+        </EmptyFolder>
+      </div>
+    ) : (
+      <div className="mx-auto max-w-lg">
+        <ErrorReturned title="We couldn't process this interview">
+          Something went wrong while we were getting the transcript or scoring it. Your interview is still in{" "}
+          <Link href={`/history/${id}`} className="font-semibold underline">
+            your history
+          </Link>
+          .
+        </ErrorReturned>
+      </div>
+    );
+  }
+  return <Processing historyId={id} step={data ? stepOf(data) : 0} hold={hold} />;
+}
+
+/** The design preview's version: steps on a timer (mock interviews only). */
+function MockProcessing({ historyId, hold }: { historyId: string; hold: boolean }) {
   const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (hold || step >= processingSteps.length) return;
+    const t = window.setTimeout(() => setStep((s) => s + 1), 1300);
+    return () => window.clearTimeout(t);
+  }, [step, hold]);
+  return <Processing historyId={historyId} step={step} hold={hold} />;
+}
+
+function Processing({ historyId, step, hold }: { historyId: string; step: number; hold: boolean }) {
+  const router = useRouter();
   const done = step >= processingSteps.length;
 
   useEffect(() => {
-    if (hold) return;
-    if (done) {
-      const t = window.setTimeout(() => router.push(`/history/${historyId}`), 1800);
-      return () => window.clearTimeout(t);
-    }
-    const t = window.setTimeout(() => setStep((s) => s + 1), 1300);
+    if (hold || !done) return;
+    const t = window.setTimeout(() => router.push(`/history/${historyId}`), 1800);
     return () => window.clearTimeout(t);
-  }, [step, done, hold, historyId, router]);
+  }, [done, hold, historyId, router]);
 
   return (
     <section aria-labelledby="proc-heading" className="sheet relative mx-auto max-w-lg overflow-hidden px-6 py-10 sm:px-10">
@@ -126,10 +185,19 @@ function InterviewerFeedback({ historyId }: { historyId: string }) {
 
 export default function WrapUpPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const session = callSessions[id];
+  const { status, session } = useCallSession(id, useCurrentUser().id);
   const [role] = useRole();
   const forced = useForcedState();
-  if (!session) notFound();
+  if (status === "missing") notFound();
+  if (!session) {
+    return (
+      <div role="status" className="desk grid min-h-dvh place-items-center">
+        <Spinner size={22} />
+      </div>
+    );
+  }
+  // Mock sessions point at mock history ids; real ones at themselves.
+  const isMock = session.historyId !== id;
 
   const isInterviewer = session.type === "human" && role === "interviewer";
 
@@ -160,7 +228,11 @@ export default function WrapUpPage({ params }: { params: Promise<{ id: string }>
             </EmptyFolder>
           </div>
         ) : (
-          <Processing historyId={session.historyId} hold={forced === "loading"} />
+          isMock ? (
+            <MockProcessing historyId={session.historyId} hold={forced === "loading"} />
+          ) : (
+            <LiveProcessing id={id} hold={forced === "loading"} />
+          )
         )}
       </main>
       <StatePreview className="fixed right-3 bottom-3 z-40" />

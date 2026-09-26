@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { ArrowLeft, Check, Lightbulb, Mail, UserPlus } from "lucide-react";
-import { getInterview, type InterviewDetail } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
+import type { InterviewDetail as ApiInterviewDetail, FriendsResponse } from "@/lib/contracts";
+import { toDetailView } from "@/lib/interview-view";
+import type { InterviewDetail } from "@/lib/mock";
+import { apiFetch, useApiResource } from "@/lib/use-api";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { TypeTag } from "@/components/InterviewTable";
 import { ScoreCard } from "@/components/ScoreCard";
 import { TranscriptView } from "@/components/TranscriptView";
@@ -64,7 +66,16 @@ function Summary({ iv, onJump }: { iv: InterviewDetail; onJump: () => void }) {
 
 function Analysis({ iv }: { iv: InterviewDetail }) {
   if (!iv.analysis) {
-    return (
+    return iv.analysisPending === "processing" ? (
+      <EmptyFolder title="Still scoring">
+        The analysis of your answers is being written. This page updates on its own when it&apos;s ready.
+      </EmptyFolder>
+    ) : iv.analysisPending === "failed" ? (
+      <EmptyFolder title="Couldn't be scored">
+        We couldn&apos;t get a transcript with your answers, or scoring it failed, so there&apos;s no analysis for
+        this one. Anything we did capture is in the Transcript tab.
+      </EmptyFolder>
+    ) : (
       <EmptyFolder title="Not scored">
         You were the interviewer in this one, so there&apos;s no analysis of your answers. Your notes and feedback are in the other tabs.
       </EmptyFolder>
@@ -100,17 +111,41 @@ function Analysis({ iv }: { iv: InterviewDetail }) {
             {a.improvements.map((w) => (
               <li key={w.point} className="text-[0.9375rem] leading-relaxed">
                 <p className="font-semibold">{w.point}</p>
-                <p className="mt-1.5 flex gap-2 text-ink-2">
-                  <Lightbulb size={17} aria-hidden="true" className="mt-0.5 flex-none text-manila-ink" />
-                  <span>
-                    <span className="hl rounded-[2px] px-1 font-semibold">Try this</span> {w.tryThis}
-                  </span>
-                </p>
+                {w.tryThis ? (
+                  <p className="mt-1.5 flex gap-2 text-ink-2">
+                    <Lightbulb size={17} aria-hidden="true" className="mt-0.5 flex-none text-manila-ink" />
+                    <span>
+                      <span className="hl rounded-[2px] px-1 font-semibold">Try this</span> {w.tryThis}
+                    </span>
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
         </section>
       </div>
+      {a.perQuestion?.length ? (
+        <section aria-labelledby="per-q" className="mt-10">
+          <h2 id="per-q" className="text-[1.125rem] font-bold">
+            Question by question
+          </h2>
+          <ol className="mt-4 space-y-4">
+            {a.perQuestion.map((q, i) => (
+              <li key={i} className="rounded-[3px] border-[1.5px] border-edge p-4">
+                <div className="flex items-baseline justify-between gap-4">
+                  <p className="font-semibold">{q.question}</p>
+                  <p className="tnum cond flex-none text-[1.25rem] font-extrabold">
+                    {q.score.toFixed(1)}
+                    <span className="ml-0.5 text-[0.8125rem] font-semibold text-ink-3">/5</span>
+                  </p>
+                </div>
+                <p className="mt-2 text-[0.9375rem] text-ink-2">{q.answerSummary}</p>
+                <p className="mt-2 text-[0.9375rem] leading-relaxed">{q.feedback}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -177,6 +212,17 @@ function Feedback({ iv }: { iv: InterviewDetail }) {
 
 function People({ iv }: { iv: InterviewDetail }) {
   const [sent, setSent] = useState<Record<string, boolean>>({});
+  const [failed, setFailed] = useState<Record<string, boolean>>({});
+
+  function addFriend(userId: string) {
+    setSent((s) => ({ ...s, [userId]: true }));
+    setFailed((f) => ({ ...f, [userId]: false }));
+    apiFetch("/api/friends", { method: "POST", body: JSON.stringify({ userId }) }).catch(() => {
+      setSent((s) => ({ ...s, [userId]: false }));
+      setFailed((f) => ({ ...f, [userId]: true }));
+    });
+  }
+
   if (iv.people.length === 0) {
     return (
       <EmptyFolder title="Just you and the AI">
@@ -193,10 +239,12 @@ function People({ iv }: { iv: InterviewDetail }) {
             <div className="min-w-0">
               <p className="font-bold">{p.name}</p>
               <p className="text-[0.875rem] text-ink-2">{p.headline}</p>
-              <a href={`mailto:${p.contact}`} className="mt-0.5 inline-flex items-center gap-1.5 text-[0.875rem] font-semibold underline">
-                <Mail size={14} aria-hidden="true" />
-                {p.contact}
-              </a>
+              {p.contact ? (
+                <a href={`mailto:${p.contact}`} className="mt-0.5 inline-flex items-center gap-1.5 text-[0.875rem] font-semibold underline">
+                  <Mail size={14} aria-hidden="true" />
+                  {p.contact}
+                </a>
+              ) : null}
             </div>
           </div>
           <div className="pl-[3.875rem] sm:pl-0">
@@ -212,9 +260,9 @@ function People({ iv }: { iv: InterviewDetail }) {
                 size="sm"
                 icon={<UserPlus size={15} aria-hidden="true" />}
                 aria-label={`Add ${p.name} as a friend`}
-                onClick={() => setSent((s) => ({ ...s, [p.id]: true }))}
+                onClick={() => addFriend(p.id)}
               >
-                Add friend
+                {failed[p.id] ? "Didn't send. Try again" : "Add friend"}
               </Button>
             )}
           </div>
@@ -226,10 +274,39 @@ function People({ iv }: { iv: InterviewDetail }) {
 
 export default function InterviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const iv = getInterview(id);
+  const viewer = useCurrentUser();
   const [tab, setTab] = useState<Tab>("summary");
-  const { status, retry } = useMockResource(iv);
-  if (!iv) notFound();
+  // Keeps refreshing while the transcript or analysis is still being produced.
+  const { status, data, retry } = useApiResource<ApiInterviewDetail>(`/api/interviews/${id}`, {
+    pollWhile: (d) =>
+      d.status === "COMPLETED" &&
+      d.transcriptStatus !== "FAILED" &&
+      d.analysis?.status !== "READY" &&
+      d.analysis?.status !== "FAILED",
+    pollMs: 3000,
+  });
+  const { data: friends } = useApiResource<FriendsResponse>("/api/friends");
+  const iv = useMemo(
+    () => (data ? toDetailView(data, viewer.id, new Set(friends?.friends.map((f) => f.id))) : null),
+    [data, friends, viewer.id],
+  );
+
+  if (!iv) {
+    return (
+      <StateView
+        status={status === "ready" ? "loading" : status}
+        loading={<LoadingSheets label="Opening the file…" layout="detail" />}
+        error={
+          <ErrorReturned title="This interview didn't load" onRetry={retry}>
+            It may have been deleted, or it isn&apos;t one of yours. Try again in a moment.
+          </ErrorReturned>
+        }
+        empty={null}
+      >
+        {null}
+      </StateView>
+    );
+  }
 
   return (
     <>

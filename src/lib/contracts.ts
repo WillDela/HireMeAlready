@@ -116,8 +116,15 @@ export const CreateInterviewInput = z.object({
   company: z.string().min(1),
   jobDescription: z.string().optional(),
   grounded: z.boolean().default(false), // scrape the web for questions reported at this company
+  // The questions the user already previewed and edited on /practice/ai. When omitted,
+  // the server generates them.
+  questions: z.array(GeneratedQuestion).min(1).max(20).optional(),
 });
 export type CreateInterviewInput = z.infer<typeof CreateInterviewInput>;
+
+// PATCH /api/interviews/:id (AI mode): the ElevenLabs conversation, once connected.
+export const UpdateInterviewInput = z.object({ elevenConversation: z.string().min(1) });
+export type UpdateInterviewInput = z.infer<typeof UpdateInterviewInput>;
 
 // POST /api/ai/questions: the AI practice setup form.
 export const QuestionSetInput = z.object({
@@ -211,6 +218,9 @@ export type UploadUrlResponse = { uploadUrl: string; storageKey: string; resumeI
 // POST /api/ai/questions
 export type QuestionSetResponse = { questions: GeneratedQuestion[] };
 
+// POST /api/interviews
+export type CreateInterviewResponse = { id: string };
+
 // POST /api/ai/signed-url
 export type AiSessionResponse = {
   signedUrl: string;
@@ -241,6 +251,7 @@ export type InterviewListItem = {
   status: InterviewStatus;
   jobTitle: string | null;
   company: string | null;
+  createdAt: string;
   startedAt: string | null;
   endedAt: string | null;
   myRole: InterviewRole;
@@ -255,6 +266,7 @@ export type InterviewDetail = InterviewPeerFields & {
   status: InterviewStatus;
   jobTitle: string | null;
   company: string | null;
+  createdAt: string;
   startedAt: string | null;
   endedAt: string | null;
   participants: ParticipantSummary[];

@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
-import type { FriendsResponse } from "@/lib/contracts";
+import type { FriendsResponse, InterviewDetail, InterviewListItem } from "@/lib/contracts";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
-import { getInterview, lastInterview } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
+import { toSummaryView } from "@/lib/interview-view";
 import { apiFetch, useApiResource } from "@/lib/use-api";
 import { FriendRow } from "@/components/FriendRow";
 import { TypeTag } from "@/components/InterviewTable";
@@ -16,8 +15,14 @@ import { PaperClip } from "@/components/ui/PaperClip";
 import { ScoreStamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned, LoadingSheets } from "@/components/ui/States";
 
-function LastScore() {
-  const detail = getInterview(lastInterview.id);
+function LastScore({ item }: { item: InterviewListItem }) {
+  const lastInterview = toSummaryView(item);
+  // The detail carries the analysis, for the "work on next" line.
+  const { data: detail } = useApiResource<InterviewDetail>(`/api/interviews/${item.id}`);
+  const workOnNext =
+    item.myRole === "INTERVIEWEE" && detail?.analysis?.status === "READY"
+      ? detail.analysis.result?.improvements[0]
+      : undefined;
   return (
     <section aria-labelledby="last-heading" className="sheet relative px-5 pt-11 pb-5 sm:px-6">
       <PaperClip className="left-7 rotate-[-8deg]" />
@@ -35,10 +40,10 @@ function LastScore() {
         </div>
         {lastInterview.score !== null ? <ScoreStamp score={lastInterview.score} size={104} land /> : null}
       </div>
-      {detail?.analysis ? (
+      {workOnNext ? (
         <p className="mt-5 border-t border-edge pt-4 text-[0.9375rem] leading-relaxed">
           <span className="font-bold">Work on next: </span>
-          <mark className="hl box-decoration-clone px-0.5">{detail.analysis.improvements[0].point}</mark>
+          <mark className="hl box-decoration-clone px-0.5">{workOnNext}</mark>
         </p>
       ) : null}
       <Link
@@ -125,7 +130,9 @@ function Requests() {
 
 export default function DashboardPage() {
   const currentUser = useCurrentUser();
-  const { status, retry } = useMockResource(lastInterview);
+  const { status, data: interviews, retry } = useApiResource<InterviewListItem[]>("/api/interviews", {
+    isEmpty: (d) => d.length === 0,
+  });
 
   return (
     <>
@@ -181,7 +188,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="sheet-in">
-              <LastScore />
+              {interviews?.[0] ? <LastScore item={interviews[0]} /> : null}
             </div>
           )}
         </div>

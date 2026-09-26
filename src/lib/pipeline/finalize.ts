@@ -10,7 +10,7 @@ import { getObjectBuffer } from "@/lib/storage";
 // own recording and merges them by wall-clock offset.
 
 const CONVERSATION_POLL_MS = 2000;
-const CONVERSATION_POLL_ATTEMPTS = 10; // ElevenLabs finishes processing a few seconds after the call ends; ~20s ceiling
+const CONVERSATION_POLL_ATTEMPTS = 20; // ElevenLabs finishes processing a few seconds after the call ends; ~40s ceiling
 
 function loadInterview(interviewId: string) {
   return db.interview.findUnique({
@@ -52,13 +52,19 @@ async function finalizeAiTranscript(interview: InterviewForFinalize): Promise<Tr
     await sleep(CONVERSATION_POLL_MS);
     conversation = await getConversation(interview.elevenConversation);
   }
-  return conversation.transcript
+  const lines = conversation.transcript
     .filter((turn): turn is typeof turn & { message: string } => Boolean(turn.message))
-    .map((turn) => ({
-      speaker: turn.role === "agent" ? "AI" : "INTERVIEWEE",
-      startMs: Math.round(turn.time_in_call_secs * 1000),
-      text: turn.message,
-    }));
+    .map(
+      (turn): TranscriptLine => ({
+        speaker: turn.role === "agent" ? "AI" : "INTERVIEWEE",
+        startMs: Math.round(turn.time_in_call_secs * 1000),
+        text: turn.message,
+      }),
+    );
+  if (lines.length === 0) {
+    throw new Error(`ElevenLabs conversation ${interview.elevenConversation} has no transcript (status: ${conversation.status})`);
+  }
+  return lines;
 }
 
 async function finalizePeerTranscript(interview: InterviewForFinalize): Promise<TranscriptLine[]> {
@@ -103,6 +109,18 @@ async function saveTranscript(interviewId: string, transcript: TranscriptLine[])
 async function runAnalysis(interview: InterviewForFinalize, transcript: TranscriptLine[]) {
   const interviewee = interview.participants.find((p) => p.role === "INTERVIEWEE");
   if (!interviewee) return;
+
+  // Nothing the candidate said means nothing to score. Fail visibly rather than have
+  // Gemini invent an assessment of an empty interview.
+  if (!transcript.some((line) => line.speaker === "INTERVIEWEE")) {
+    const error = "No answers were captured, so there's nothing to analyze.";
+    await db.analysis.upsert({
+      where: { interviewId: interview.id },
+      create: { interviewId: interview.id, subjectUserId: interviewee.userId, status: "FAILED", error },
+      update: { status: "FAILED", result: undefined, error },
+    });
+    return;
+  }
 
   await db.analysis.upsert({
     where: { interviewId: interview.id },

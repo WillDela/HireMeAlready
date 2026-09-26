@@ -17,7 +17,9 @@ function Score({ interview }: { interview: InterviewSummary }) {
       <span className="text-[0.875rem] text-ink-3">
         <span aria-hidden="true">—</span>
         <span className="visually-hidden">Not scored</span>
-        <span className="block text-[0.75rem]">You interviewed</span>
+        <span className="block text-[0.75rem]">
+          {interview.yourRole === "interviewer" ? "You interviewed" : "Not scored"}
+        </span>
       </span>
     );
   }

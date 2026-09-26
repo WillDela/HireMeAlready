@@ -4,15 +4,17 @@ import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { callSessions } from "@/lib/mock";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
+import { useCallSession } from "@/lib/use-call-session";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { DeviceCheck, type Permission } from "@/components/call/DeviceCheck";
 import { TypeTag } from "@/components/InterviewTable";
+import { Spinner } from "@/components/ui/Spinner";
 import { StatePreview } from "@/components/ui/StatePreview";
 
 export default function LobbyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const session = callSessions[id];
+  const { status, session } = useCallSession(id, useCurrentUser().id);
   const router = useRouter();
   const forced = useForcedState();
   const [checked, setChecked] = useState(false);
@@ -24,7 +26,16 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
     return () => window.clearTimeout(t);
   }, [attempt]);
 
-  if (!session) notFound();
+  if (status === "missing") notFound();
+  if (!session) {
+    return (
+      <div role="status" className="desk grid min-h-dvh place-items-center">
+        <p className="flex items-center gap-3 text-[1.0625rem] font-semibold">
+          <Spinner size={22} /> Opening your interview…
+        </p>
+      </div>
+    );
+  }
 
   const permission: Permission =
     forced === "loading" ? "checking" : forced === "error" ? "denied" : forced === "empty" ? "none" : checked ? "granted" : "checking";
