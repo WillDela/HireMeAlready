@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { MicOff, VideoOff } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /**
- * A participant's video. Plays `stream` when given (mirrored for yourself);
- * without one, a live camera renders as the person's monogram on the feed ground.
+ * A participant's video. With a `stream` it plays the live feed (your own tile is
+ * muted and mirrored); without one, the camera renders as the person's monogram.
  */
 export function VideoTile({
+  stream,
   name,
   initials,
   self = false,
@@ -16,10 +17,10 @@ export function VideoTile({
   cameraOff = false,
   speaking = false,
   compact = false,
-  stream = null,
   className,
   children,
 }: {
+  stream?: MediaStream | null;
   name: string;
   initials: string;
   self?: boolean;
@@ -27,17 +28,16 @@ export function VideoTile({
   cameraOff?: boolean;
   speaking?: boolean;
   compact?: boolean;
-  stream?: MediaStream | null;
   className?: string;
   children?: ReactNode;
 }) {
   const label = self ? "You" : name;
   const videoRef = useRef<HTMLVideoElement>(null);
-  const showVideo = !cameraOff && stream !== null && stream.getVideoTracks().length > 0;
+  const live = Boolean(stream) && !cameraOff;
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = showVideo ? stream : null;
-  }, [stream, showVideo]);
+    if (videoRef.current) videoRef.current.srcObject = stream ?? null;
+  }, [stream, live]);
   return (
     <figure
       className={cn(
@@ -47,23 +47,21 @@ export function VideoTile({
       )}
       aria-label={`${label}${cameraOff ? ", camera off" : ""}${muted ? ", muted" : ""}`}
     >
-      {cameraOff ? (
+      {live ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={self}
+          className={cn("absolute inset-0 size-full object-cover", self && "-scale-x-100")}
+        />
+      ) : cameraOff ? (
         <div className="absolute inset-0 grid place-items-center text-ink-2">
           <div className="flex flex-col items-center gap-2">
             <VideoOff size={compact ? 20 : 28} aria-hidden="true" />
             {!compact ? <span className="text-[0.875rem] font-semibold">Camera off</span> : null}
           </div>
         </div>
-      ) : showVideo ? (
-        // Mute your own tile, or you'll hear yourself.
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={self}
-          aria-hidden="true"
-          className={cn("absolute inset-0 size-full object-cover", self && "-scale-x-100")}
-        />
       ) : (
         <div
           aria-hidden="true"
