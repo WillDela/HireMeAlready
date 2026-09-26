@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { FileText, Pencil, Upload } from "lucide-react";
-import { userResume } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
+import { apiFetch, useApiResource } from "@/lib/use-api";
+import type { ResumeView } from "@/lib/views";
 import { ParsedResumeEditor, type EditableResume } from "@/components/ParsedResumeEditor";
 import { ResumeUploader } from "@/components/ResumeUploader";
 import { Button } from "@/components/ui/Button";
@@ -12,17 +12,54 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Stamp } from "@/components/ui/Stamp";
 import { ErrorReturned, LoadingSheets, StateView } from "@/components/ui/States";
 
+const isParsing = (r: ResumeView | null) => r?.parseStatus === "PENDING" || r?.parseStatus === "PROCESSING";
+
 export default function ResumePage() {
-  const { status, retry } = useMockResource(userResume);
-  const [file, setFile] = useState({ name: userResume.fileName, size: userResume.fileSize, date: userResume.uploadedAt });
-  const [details, setDetails] = useState<EditableResume>({
-    summary: userResume.summary,
-    skills: userResume.skills,
-    experience: userResume.experience,
+  const { status, data, retry, reload, mutate } = useApiResource<ResumeView | null>("/api/resume", {
+    isEmpty: (r) => r === null,
+    pollWhile: isParsing,
   });
   const [draft, setDraft] = useState<EditableResume | null>(null);
   const [replacing, setReplacing] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const resume = data ?? null;
+  const details: EditableResume = {
+    summary: resume?.summary ?? "",
+    skills: resume?.skills ?? [],
+    experience: resume?.experience ?? [],
+  };
+
+  async function save(edits: EditableResume) {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      mutate(
+        await apiFetch<ResumeView>("/api/resume", {
+          method: "PATCH",
+          body: JSON.stringify({
+            summary: edits.summary,
+            skills: edits.skills,
+            experience: edits.experience.map(({ title, company, start, end, bullets }) => ({
+              title,
+              company,
+              start,
+              end,
+              bullets: bullets.filter(Boolean),
+            })),
+          }),
+        }),
+      );
+      setDraft(null);
+      setSavedAt("Saved just now");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Your changes didn't save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <>
@@ -49,7 +86,7 @@ export default function ResumePage() {
               Without one, we can&apos;t match you with interviewers who know your field. Upload it once; you can edit
               what we read.
             </p>
-            <ResumeUploader className="mt-6" onUploaded={() => retry()} />
+            <ResumeUploader className="mt-6" onUploaded={() => reload()} />
           </section>
         }
       >
@@ -64,11 +101,20 @@ export default function ResumePage() {
               <div className="folder p-3">
                 <div className="sheet p-5">
                   <FileText size={30} strokeWidth={1.6} aria-hidden="true" className="text-ink-2" />
-                  <p className="mt-3 font-bold break-all">{file.name}</p>
-                  <p className="text-[0.875rem] text-ink-2">
-                    {file.size} · {userResume.pages} pages
+                  <p className="mt-3 font-bold break-all">
+                    {resume?.downloadUrl ? (
+                      <a href={resume.downloadUrl} target="_blank" rel="noreferrer" className="underline hover:text-ink-2">
+                        {resume.fileName}
+                      </a>
+                    ) : (
+                      resume?.fileName
+                    )}
                   </p>
-                  <p className="text-[0.875rem] text-ink-2">Uploaded {file.date}</p>
+                  <p className="text-[0.875rem] text-ink-2">
+                    {resume?.fileSize}
+                    {resume?.pages ? ` · ${resume.pages} pages` : null}
+                  </p>
+                  <p className="text-[0.875rem] text-ink-2">Uploaded {resume?.uploadedAt}</p>
                 </div>
                 <div className="flex gap-2 px-1 pt-3">
                   <Button
@@ -85,7 +131,7 @@ export default function ResumePage() {
                     className="flex-1"
                     icon={<Pencil size={16} aria-hidden="true" />}
                     onClick={() => setDraft(details)}
-                    disabled={draft !== null}
+                    disabled={draft !== null || resume?.parseStatus !== "READY"}
                   >
                     Edit
                   </Button>
@@ -110,10 +156,12 @@ export default function ResumePage() {
                 <ResumeUploader
                   className="mt-5"
                   onCancel={() => setReplacing(false)}
-                  onUploaded={(f) => {
-                    setFile({ name: f.name, size: f.size, date: "just now" });
+                  onUploaded={(r) => {
+                    mutate(r);
+                    reload(); // polls until the new file is parsed
                     setReplacing(false);
-                    setDraft(details);
+                    setDraft(null);
+                    setSavedAt(null);
                   }}
                 />
               </section>
@@ -126,20 +174,38 @@ export default function ResumePage() {
                 </h2>
                 <p className="mt-1 mb-7 text-[0.9375rem] text-ink-2">Changes here don&apos;t alter your PDF, only what interviewers and the AI see.</p>
                 <ParsedResumeEditor value={draft} onChange={setDraft} />
+                {saveError ? (
+                  <p role="alert" className="mt-6 text-[0.9375rem] text-stamp">
+                    {saveError}
+                  </p>
+                ) : null}
                 <div className="mt-8 flex justify-end gap-3 border-t border-edge pt-6">
-                  <Button variant="ghost" onClick={() => setDraft(null)}>
+                  <Button variant="ghost" onClick={() => setDraft(null)} disabled={saving}>
                     Cancel
                   </Button>
-                  <Button
-                    onClick={() => {
-                      setDetails(draft);
-                      setDraft(null);
-                      setSavedAt("Saved just now");
-                    }}
-                  >
+                  <Button onClick={() => save(draft)} loading={saving} loadingLabel="Saving…">
                     Save changes
                   </Button>
                 </div>
+              </section>
+            ) : isParsing(resume) ? (
+              <section aria-labelledby="reading-heading" className="sheet p-6 sm:p-8">
+                <h2 id="reading-heading" className="text-[1.375rem] font-bold">
+                  Reading your resume
+                </h2>
+                <p className="mt-1 mb-6 text-[0.9375rem] text-ink-2">
+                  Pulling out your skills and experience. This usually takes a few seconds.
+                </p>
+                <LoadingSheets label="Reading your resume…" layout="detail" />
+              </section>
+            ) : resume?.parseStatus === "FAILED" ? (
+              <section aria-labelledby="failed-heading">
+                <h2 id="failed-heading" className="visually-hidden">
+                  Couldn&apos;t read this file
+                </h2>
+                <ErrorReturned title="We couldn't read this file" onRetry={() => setReplacing(true)}>
+                  It may be a scan or a photo of a page. Replace it with the PDF exported from your editor.
+                </ErrorReturned>
               </section>
             ) : (
               <section aria-labelledby="parsed-heading" className="sheet relative p-6 sm:p-8">
@@ -186,7 +252,7 @@ export default function ResumePage() {
                 </ol>
 
                 <h3 className="cond mt-6 text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">Education</h3>
-                {userResume.education.map((ed) => (
+                {resume?.education.map((ed) => (
                   <p key={ed.school} className="mt-2 text-[0.9375rem]">
                     {ed.degree}, {ed.school} ({ed.year})
                   </p>

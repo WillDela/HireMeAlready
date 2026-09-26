@@ -6,8 +6,9 @@ import { Download, Monitor, Moon, Sun, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { type Role } from "@/lib/mock";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
-import { useMockResource } from "@/lib/mock-state";
+import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole, useTheme, type ThemeChoice } from "@/lib/prefs";
+import { apiFetch } from "@/lib/use-api";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { SelectField, TextField } from "@/components/ui/Field";
@@ -38,8 +39,13 @@ const themes: { value: ThemeChoice; label: string; hint: string; icon: typeof Su
 export default function SettingsPage() {
   const currentUser = useCurrentUser();
   const router = useRouter();
-  const { status, retry } = useMockResource(currentUser);
-  const [role, setRole] = useRole();
+  // The profile arrives with the page (from the layout); ?state= still previews the other states.
+  const status = useForcedState() ?? "ready";
+  const retry = () => setForcedState(null);
+  const [, setRole] = useRole();
+  const [role, setDefaultRole] = useState<Role>(currentUser.defaultRole);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
   const [theme, setTheme] = useTheme();
   const blank = status === "empty";
   const [name, setName] = useState(currentUser.name);
@@ -55,13 +61,38 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState<"idle" | "working" | "ready">("idle");
 
-  function saveProfile(e: FormEvent) {
+  async function saveProfile(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    window.setTimeout(() => {
-      setSaving(false);
+    setProfileError(null);
+    try {
+      await apiFetch("/api/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ name, headline, preferredRole: role.toUpperCase() }),
+      });
+      setRole(role);
       setProfileSaved(true);
-    }, 700);
+      router.refresh(); // the top bar and sidebar read the name from the layout
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : "Your profile didn't save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Privacy switches save as soon as they're flipped, and flip back if saving fails. */
+  function savePrivacy(field: "recordingConsent" | "shareResume" | "discoverable", set: (v: boolean) => void) {
+    return async (value: boolean) => {
+      set(value);
+      setPrivacyError(null);
+      try {
+        await apiFetch("/api/profile", { method: "PATCH", body: JSON.stringify({ [field]: value }) });
+        router.refresh();
+      } catch {
+        set(!value);
+        setPrivacyError("That setting didn't save. Try again.");
+      }
+    };
   }
 
   return (
@@ -98,10 +129,9 @@ export default function SettingsPage() {
                   type="email"
                   autoComplete="email"
                   value={blank ? "" : email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setProfileSaved(false);
-                  }}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled
+                  hint="Email changes aren't available yet."
                 />
               </div>
               <TextField
@@ -117,10 +147,18 @@ export default function SettingsPage() {
                 label="Default role when you sign in"
                 options={["Interviewee", "Interviewer"]}
                 value={role === "interviewee" ? "Interviewee" : "Interviewer"}
-                onChange={(e) => setRole(e.target.value.toLowerCase() as Role)}
+                onChange={(e) => {
+                  setDefaultRole(e.target.value.toLowerCase() as Role);
+                  setProfileSaved(false);
+                }}
                 className="max-w-xs"
               />
               <div className="flex items-center justify-end gap-4 pt-1">
+                {profileError ? (
+                  <span role="alert" className="text-[0.875rem] font-semibold text-stamp">
+                    {profileError}
+                  </span>
+                ) : null}
                 {profileSaved ? (
                   <span role="status" className="text-[0.875rem] font-semibold text-ink">
                     Saved
@@ -165,21 +203,26 @@ export default function SettingsPage() {
                 label="Record my practice calls"
                 description="Needed to transcribe and score interviews. Turning it off means calls still work, but you won't get an AI analysis or transcript."
                 checked={recording}
-                onChange={setRecording}
+                onChange={savePrivacy("recordingConsent", setRecording)}
               />
               <Switch
                 label="Share my resume with matched interviewers"
                 description="Interviewers see your parsed resume during the call so they can ask about your real work."
                 checked={shareResume}
-                onChange={setShareResume}
+                onChange={savePrivacy("shareResume", setShareResume)}
               />
               <Switch
                 label="Let people find me by name"
                 description="You'll appear in Find people. Friends can always see you."
                 checked={discoverable}
-                onChange={setDiscoverable}
+                onChange={savePrivacy("discoverable", setDiscoverable)}
               />
             </div>
+            {privacyError ? (
+              <p role="alert" className="mt-2 text-[0.875rem] font-semibold text-stamp">
+                {privacyError}
+              </p>
+            ) : null}
             {!recording ? (
               <p role="status" className="mt-2 rounded-[3px] bg-stamp-wash p-3 text-[0.875rem]">
                 Recording is off. New interviews won&apos;t be scored or transcribed.

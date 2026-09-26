@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, Check, FileText, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { userResume, type Role } from "@/lib/mock";
+import type { Role } from "@/lib/mock";
 import { useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { apiFetch, useApiResource } from "@/lib/use-api";
+import type { ResumeView } from "@/lib/views";
 import { ParsedResumeEditor, type EditableResume } from "@/components/ParsedResumeEditor";
 import { ResumeUploader } from "@/components/ResumeUploader";
 import { Wordmark } from "@/components/shell/Wordmark";
@@ -21,19 +23,67 @@ export default function OnboardingPage() {
   const forced = useForcedState();
   const [, setRole] = useRole();
   const [step, setStep] = useState(0);
-  const [file, setFile] = useState<{ name: string; size: string } | null>(null);
-  const [resume, setResume] = useState<EditableResume>({
-    summary: userResume.summary,
-    skills: userResume.skills.slice(0, 8),
-    experience: userResume.experience.slice(0, 2),
+  const { data: uploaded, mutate, reload } = useApiResource<ResumeView | null>(step >= 1 ? "/api/resume" : null, {
+    pollWhile: (r) => r?.parseStatus === "PENDING" || r?.parseStatus === "PROCESSING",
   });
+  // null until the user edits; until then the editor shows what the parser read.
+  const [edits, setEdits] = useState<EditableResume | null>(null);
   const [role, setChosen] = useState<Role>("interviewee");
-  const [finishing, setFinishing] = useState(false);
+  const [busy, setBusy] = useState<"saving" | "finishing" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function finish() {
+  const parsed: EditableResume | null =
+    uploaded?.parseStatus === "READY"
+      ? { summary: uploaded.summary, skills: uploaded.skills, experience: uploaded.experience }
+      : null;
+  const resume = edits ?? parsed;
+
+  async function confirmDetails() {
+    setError(null);
+    if (edits) {
+      setBusy("saving");
+      try {
+        await apiFetch("/api/resume", {
+          method: "PATCH",
+          body: JSON.stringify({
+            summary: edits.summary,
+            skills: edits.skills,
+            experience: edits.experience.map(({ title, company, start, end, bullets }) => ({
+              title,
+              company,
+              start,
+              end,
+              bullets: bullets.filter(Boolean),
+            })),
+          }),
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Your changes didn't save. Try again.");
+        return;
+      } finally {
+        setBusy(null);
+      }
+    }
+    setStep(2);
+  }
+
+  async function finish() {
+    setError(null);
+    setBusy("finishing");
+    try {
+      await apiFetch("/api/profile", {
+        method: "PATCH",
+        // Consent was given at sign up, which requires it.
+        body: JSON.stringify({ preferredRole: role.toUpperCase(), recordingConsent: true }),
+      });
+    } catch (err) {
+      setBusy(null);
+      setError(err instanceof Error ? err.message : "That didn't save. Try again.");
+      return;
+    }
     setRole(role);
-    setFinishing(true);
-    window.setTimeout(() => router.push("/dashboard"), 700);
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -100,9 +150,11 @@ export default function OnboardingPage() {
                         ? "We couldn't read any text in resume-scan.pdf. It may be a photo of a page. Upload the original PDF or a Word file."
                         : null
                     }
-                    onUploaded={(f) => {
-                      setFile(f);
+                    onUploaded={(r) => {
+                      mutate(r);
+                      setEdits(null);
                       setStep(1);
+                      reload();
                     }}
                   />
                 )}
@@ -120,8 +172,8 @@ export default function OnboardingPage() {
                   </div>
                   <p className="flex items-center gap-2 rounded-[3px] bg-paper-2 px-3 py-2 text-[0.875rem]">
                     <FileText size={16} aria-hidden="true" className="text-ink-2" />
-                    <span className="font-semibold">{file?.name ?? userResume.fileName}</span>
-                    <span className="text-ink-2">{file?.size ?? userResume.fileSize}</span>
+                    <span className="font-semibold">{uploaded?.fileName}</span>
+                    <span className="text-ink-2">{uploaded?.fileSize}</span>
                   </p>
                 </div>
                 <div className="mt-7">
@@ -131,16 +183,35 @@ export default function OnboardingPage() {
                       <p className="mt-1 text-ink-2">Add them below, or go back and upload a different version.</p>
                     </div>
                   ) : null}
-                  <ParsedResumeEditor
-                    value={forced === "empty" ? { summary: "", skills: [], experience: [] } : resume}
-                    onChange={setResume}
-                  />
+                  {forced === "empty" ? (
+                    <ParsedResumeEditor value={{ summary: "", skills: [], experience: [] }} onChange={setEdits} />
+                  ) : uploaded?.parseStatus === "FAILED" ? (
+                    <div role="alert" className="rounded-[3px] bg-stamp-wash p-5 text-[0.9375rem]">
+                      <p className="font-bold">We couldn&apos;t read this file.</p>
+                      <p className="mt-1">It may be a scan or a photo of a page. Go back and upload the PDF exported from your editor.</p>
+                    </div>
+                  ) : resume ? (
+                    <ParsedResumeEditor value={resume} onChange={setEdits} />
+                  ) : (
+                    <LoadingSheets label="Reading your resume…" layout="form" rows={3} />
+                  )}
+                  {error ? (
+                    <p role="alert" className="mt-5 text-[0.9375rem] text-stamp">
+                      {error}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="mt-8 flex flex-wrap justify-between gap-3 border-t border-edge pt-6">
                   <Button variant="ghost" onClick={() => setStep(0)} icon={<ArrowLeft size={16} aria-hidden="true" />}>
                     Upload a different file
                   </Button>
-                  <Button size="lg" onClick={() => setStep(2)}>
+                  <Button
+                    size="lg"
+                    onClick={confirmDetails}
+                    disabled={!resume && forced !== "empty"}
+                    loading={busy === "saving"}
+                    loadingLabel="Saving…"
+                  >
                     Looks right
                   </Button>
                 </div>
@@ -201,11 +272,16 @@ export default function OnboardingPage() {
                     })}
                   </div>
                 </fieldset>
+                {error ? (
+                  <p role="alert" className="mt-5 text-[0.9375rem] text-stamp">
+                    {error}
+                  </p>
+                ) : null}
                 <div className="mt-8 flex flex-wrap justify-between gap-3 border-t border-edge pt-6">
                   <Button variant="ghost" onClick={() => setStep(1)} icon={<ArrowLeft size={16} aria-hidden="true" />}>
                     Back
                   </Button>
-                  <Button size="lg" onClick={finish} loading={finishing} loadingLabel="Opening your desk…">
+                  <Button size="lg" onClick={finish} loading={busy === "finishing"} loadingLabel="Opening your desk…">
                     Finish setup
                   </Button>
                 </div>

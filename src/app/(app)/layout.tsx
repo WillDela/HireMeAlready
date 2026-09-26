@@ -1,11 +1,10 @@
 import { AppShell } from "@/components/shell/AppShell";
 import { CurrentUserProvider } from "@/components/shell/CurrentUserProvider";
-import { requirePageUser } from "@/lib/session";
+import { requireViewer } from "@/lib/profile";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requirePageUser();
   return (
-    <CurrentUserProvider user={{ id: user.id, name: user.name, email: user.email }}>
+    <CurrentUserProvider viewer={await requireViewer()}>
       <AppShell>{children}</AppShell>
     </CurrentUserProvider>
   );
