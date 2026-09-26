@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Search } from "lucide-react";
-import { matchPartners, userResume } from "@/lib/mock";
+import type { QueueState } from "@/lib/contracts";
+import { userResume } from "@/lib/mock";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { apiFetch } from "@/lib/use-api";
 import { DeviceCheck } from "@/components/call/DeviceCheck";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +17,14 @@ import { Stamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned } from "@/components/ui/States";
 
 type Phase = "idle" | "searching" | "matched" | "lobby";
+
+const POLL_MS = 2000;
+const NO_MATCH_AFTER_MS = 30_000;
+
+function initialsOf(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? "?").slice(0, 2)).toUpperCase();
+}
 
 function SearchingRing() {
   return (
@@ -40,23 +50,74 @@ export default function LivePracticePage() {
   const [company, setCompany] = useState("Halcyon Health");
   const [jobTitle, setJobTitle] = useState("Product Designer");
   const [joining, setJoining] = useState(false);
-  const partner = matchPartners[role];
+  const [matched, setMatched] = useState<Extract<QueueState, { state: "matched" }> | null>(null);
   const seeking = role === "interviewee" ? "an interviewer" : "a candidate";
+  const pollRef = useRef<{ timer?: number; cancelled: boolean; noMatchTimer?: number }>({ cancelled: true });
 
-  useEffect(() => {
-    if (phase !== "searching" || forced) return;
-    const tick = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    const found = window.setTimeout(() => setPhase("matched"), 4200);
-    return () => {
-      window.clearInterval(tick);
-      window.clearTimeout(found);
-    };
-  }, [phase, forced]);
+  const stopSearch = useCallback((leaveQueue: boolean) => {
+    pollRef.current.cancelled = true;
+    window.clearTimeout(pollRef.current.timer);
+    window.clearTimeout(pollRef.current.noMatchTimer);
+    if (leaveQueue) apiFetch("/api/queue", { method: "DELETE" }).catch(() => {});
+  }, []);
+
+  // Leave the queue if the user navigates away mid-search.
+  useEffect(() => () => stopSearch(true), [stopSearch]);
 
   function start() {
     setSeconds(0);
     setPhase("searching");
+    pollRef.current.cancelled = false;
+
+    const poll = async () => {
+      try {
+        const state = await apiFetch<QueueState>("/api/queue");
+        if (pollRef.current.cancelled) return;
+        if (state.state === "matched") {
+          stopSearch(false);
+          setMatched(state);
+          setPhase("matched");
+          return;
+        }
+        pollRef.current.timer = window.setTimeout(poll, POLL_MS);
+      } catch {
+        if (!pollRef.current.cancelled) setForcedState("error");
+      }
+    };
+
+    (async () => {
+      try {
+        const state = await apiFetch<QueueState>("/api/queue", {
+          method: "POST",
+          body: JSON.stringify({
+            role: role === "interviewer" ? "INTERVIEWER" : "INTERVIEWEE",
+            jobTitle: role === "interviewee" ? jobTitle || undefined : undefined,
+          }),
+        });
+        if (pollRef.current.cancelled) return;
+        if (state.state === "matched") {
+          setMatched(state);
+          setPhase("matched");
+          return;
+        }
+        pollRef.current.timer = window.setTimeout(poll, POLL_MS);
+        pollRef.current.noMatchTimer = window.setTimeout(() => {
+          if (pollRef.current.cancelled) return;
+          stopSearch(false);
+          setPhase("idle"); // the "no one free" empty state, forced below
+          setForcedState("empty");
+        }, NO_MATCH_AFTER_MS);
+      } catch {
+        if (!pollRef.current.cancelled) setForcedState("error");
+      }
+    })();
   }
+
+  useEffect(() => {
+    if (phase !== "searching") return;
+    const tick = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => window.clearInterval(tick);
+  }, [phase]);
 
   const shown =
     forced === "loading" ? "searching" : forced === "error" ? "error" : forced === "empty" ? "none" : phase;
@@ -136,6 +197,7 @@ export default function LivePracticePage() {
             variant="secondary"
             className="mt-7"
             onClick={() => {
+              stopSearch(true);
               if (forced) setForcedState(null);
               setPhase("idle");
             }}
@@ -156,20 +218,20 @@ export default function LivePracticePage() {
               </>
             }
           >
-            We searched for 2 minutes. Evenings are busiest; you can also invite a friend from the Friends page.
+            We searched for {Math.round(NO_MATCH_AFTER_MS / 1000)} seconds. Evenings are busiest; you can also invite a friend from the Friends page.
           </EmptyFolder>
         </div>
       ) : null}
 
       {shown === "error" ? (
         <div className="mx-auto max-w-xl">
-          <ErrorReturned title="Matching isn't working right now" onRetry={() => { setForcedState(null); setPhase("idle"); }}>
+          <ErrorReturned title="Matching isn't working right now" onRetry={() => { stopSearch(true); setForcedState(null); setPhase("idle"); }}>
             This is on our side, not your connection. AI practice still works while we fix it.
           </ErrorReturned>
         </div>
       ) : null}
 
-      {shown === "matched" ? (
+      {shown === "matched" && matched ? (
         <section aria-labelledby="matched-heading" className="relative mx-auto max-w-xl pt-7 sheet-in">
           <div className="folder-tab w-32" aria-hidden="true" />
           <div className="folder p-3 sm:p-4">
@@ -179,35 +241,20 @@ export default function LivePracticePage() {
               </Stamp>
               <div role="status" aria-live="polite">
                 <h2 id="matched-heading" className="visually-hidden">
-                  Match found: {partner.name}
+                  Match found: {matched.partnerName}
                 </h2>
               </div>
-              <Avatar name={partner.name} initials={partner.initials} size={64} />
-              <p className="mt-4 text-[1.5rem] leading-tight font-extrabold tracking-[-0.01em]">{partner.name}</p>
-              <p className="text-ink-2">{partner.headline}</p>
+              <Avatar name={matched.partnerName} initials={initialsOf(matched.partnerName)} size={64} />
+              <p className="mt-4 text-[1.5rem] leading-tight font-extrabold tracking-[-0.01em]">{matched.partnerName}</p>
               <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-edge pt-5 text-[0.9375rem]">
                 <div>
                   <dt className="cond text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">Their role</dt>
-                  <dd className="mt-1 font-bold">{partner.role === "interviewer" ? "Interviewer" : "Interviewee"}</dd>
-                </div>
-                <div>
-                  <dt className="cond text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">Practice interviews</dt>
-                  <dd className="tnum mt-1 font-bold">{partner.interviewsDone}</dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="cond text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">Matched on</dt>
-                  <dd className="mt-2 flex flex-wrap gap-1.5">
-                    {partner.matchedOn.map((m) => (
-                      <span key={m} className="rounded-[3px] bg-paper-2 px-2 py-1 text-[0.8125rem] font-medium">
-                        {m}
-                      </span>
-                    ))}
-                  </dd>
+                  <dd className="mt-1 font-bold">{role === "interviewee" ? "Interviewer" : "Interviewee"}</dd>
                 </div>
               </dl>
             </div>
             <div className="flex flex-col-reverse gap-2 px-2 pt-4 pb-1 sm:flex-row sm:justify-end">
-              <Button variant="ghost" onClick={start}>
+              <Button variant="ghost" onClick={() => { stopSearch(true); start(); }}>
                 Find someone else
               </Button>
               <Button size="lg" onClick={() => setPhase("lobby")}>
@@ -218,16 +265,16 @@ export default function LivePracticePage() {
         </section>
       ) : null}
 
-      {shown === "lobby" ? (
+      {shown === "lobby" && matched ? (
         <section aria-labelledby="lobby-heading" className="sheet-in">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Avatar name={partner.name} initials={partner.initials} size={40} status="online" />
+              <Avatar name={matched.partnerName} initials={initialsOf(matched.partnerName)} size={40} status="online" />
               <div>
                 <h2 id="lobby-heading" className="text-[1.25rem] font-bold">
                   Lobby
                 </h2>
-                <p className="text-[0.9375rem] text-manila-ink">{partner.name} is in the lobby and ready.</p>
+                <p className="text-[0.9375rem] text-manila-ink">{matched.partnerName} is in the lobby and ready.</p>
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setPhase("matched")} icon={<ArrowLeft size={16} aria-hidden="true" />}>
@@ -240,7 +287,7 @@ export default function LivePracticePage() {
             joining={joining}
             onJoin={() => {
               setJoining(true);
-              router.push("/call/live-halcyon");
+              router.push(`/call/${matched.interviewId}/lobby`);
             }}
           />
         </section>

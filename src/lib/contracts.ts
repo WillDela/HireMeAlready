@@ -184,6 +184,7 @@ export type QueueState =
       role: InterviewRole;
       selfPeerId: string;
       remotePeerId: string;
+      partnerName: string;
     }
   | { state: "expired" };
 
@@ -207,6 +208,15 @@ export type ParticipantSummary = {
   contact?: { email: string; linkedinUrl?: string };
 };
 
+// Peer mode only (mode: "PEER"); null for AI interviews. Added for Stream A's
+// usePeerCall wiring in /call/[id].
+export type InterviewPeerFields = {
+  myPeerId: string | null;
+  partnerPeerId: string | null;
+  // The other participant's resume, only when their Profile.shareResume is true.
+  partnerResume: { summary: string; skills: string[] } | null;
+};
+
 // GET /api/interviews (history list)
 export type InterviewListItem = {
   id: string;
@@ -222,7 +232,7 @@ export type InterviewListItem = {
 };
 
 // GET /api/interviews/:id
-export type InterviewDetail = {
+export type InterviewDetail = InterviewPeerFields & {
   id: string;
   mode: InterviewMode;
   status: InterviewStatus;
@@ -236,6 +246,48 @@ export type InterviewDetail = {
   transcriptStatus: JobStatus;
   analysis: { status: JobStatus; result: AnalysisResult | null } | null;
   feedback: (FeedbackInput & { authorName: string; createdAt: string })[];
+};
+
+// ---------- Friends ----------
+
+export const SendFriendRequestInput = z.object({ userId: z.string().min(1) });
+export type SendFriendRequestInput = z.infer<typeof SendFriendRequestInput>;
+
+export const RespondFriendRequestInput = z.object({ status: z.enum(["ACCEPTED", "DECLINED"]) });
+export type RespondFriendRequestInput = z.infer<typeof RespondFriendRequestInput>;
+
+export type PersonSummary = { id: string; name: string; initials: string; headline: string };
+
+// GET /api/friends
+export type FriendsResponse = {
+  friends: (PersonSummary & { sharedInterviews: number })[];
+  incoming: (PersonSummary & { requestId: string; sentAt: string })[];
+  outgoing: (PersonSummary & { requestId: string; sentAt: string })[];
+};
+
+// GET /api/friends/search?q=
+export type PersonSearchResult = PersonSummary & {
+  status: "none" | "incoming" | "outgoing" | "friends";
+};
+
+// ---------- Admin ----------
+
+export const ReportStatus = z.enum(["OPEN", "IN_REVIEW", "ACTIONED", "DISMISSED"]);
+export type ReportStatus = z.infer<typeof ReportStatus>;
+
+export const UpdateReportStatusInput = z.object({ status: ReportStatus });
+export type UpdateReportStatusInput = z.infer<typeof UpdateReportStatusInput>;
+
+// GET /api/admin/reports
+export type AdminReportItem = {
+  id: string;
+  reporterName: string;
+  reportedName: string;
+  reason: string;
+  details: string | null;
+  createdAt: string;
+  interviewId: string;
+  status: ReportStatus;
 };
 
 // ---------- Helpers ----------

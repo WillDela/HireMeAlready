@@ -148,6 +148,13 @@ enum InviteStatus {
   EXPIRED
 }
 
+enum ReportStatus {
+  OPEN
+  IN_REVIEW
+  ACTIONED
+  DISMISSED
+}
+
 // ---------- Profile & resume ----------
 
 model Profile {
@@ -322,6 +329,7 @@ model Report {
   reported    User      @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
   reason      String
   details     String?
+  status      ReportStatus @default(OPEN)
   createdAt   DateTime  @default(now())
 
   @@map("report")
