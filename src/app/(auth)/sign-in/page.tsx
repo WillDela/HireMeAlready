@@ -33,7 +33,8 @@ export default function SignInPage() {
       setError(error.message ?? "Something went wrong");
       return;
     }
-    router.push("/");
+    // Read at submit time rather than via useSearchParams, which would need a Suspense boundary.
+    router.push(safeRedirect(new URLSearchParams(window.location.search).get("next")));
     router.refresh();
   }
 
@@ -83,4 +84,9 @@ export default function SignInPage() {
       </Card>
     </main>
   );
+}
+
+/** Only allow same-site paths, so `?next=` can't send users to another site. */
+function safeRedirect(next: string | null) {
+  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
 }

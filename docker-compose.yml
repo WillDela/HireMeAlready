@@ -1,7 +1,5 @@
 # Production stack on the droplet. Only Caddy publishes ports: Docker-published ports
 # bypass ufw, so every other service uses `expose` and is reached through Caddy.
-#
-# Stream A adds: `peer` (PeerJS signaling, expose 9000) and `coturn` (network_mode: host).
 
 services:
   web:
@@ -16,6 +14,25 @@ services:
     expose:
       - "3000"
 
+  peer:
+    build: ./peer-server
+    restart: unless-stopped
+    expose:
+      - "9000"
+
+  # Host networking: TURN needs the real public IP and a wide UDP port range, which
+  # Docker's port publishing handles poorly. ufw applies to it normally.
+  coturn:
+    image: coturn/coturn:4.18.0
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=${TURN_SECRET:?TURN_SECRET must be set in .env}
+
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -28,6 +45,7 @@ services:
       - caddy_config:/config
     depends_on:
       - web
+      - peer
 
 volumes:
   caddy_data:
