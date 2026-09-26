@@ -56,6 +56,16 @@ The `ufw` firewall allows only: 22 (SSH), 80/443 (Caddy), 3478 tcp+udp and 5349 
 
 **Docker-published ports bypass ufw.** In `docker-compose.yml`, only Caddy should use `ports:` (80/443). Every other service uses `expose:` and is reached through Caddy on the Compose network, and coturn uses `network_mode: host`. Writing `ports: ["3000:3000"]` would expose that service to the internet even though ufw doesn't allow it.
 
+## WebRTC (peer video calls)
+
+- **Signaling:** a PeerJS server (`peer-server/`), reached through Caddy at `https://hiremealready.study/peerjs`.
+- **TURN/STUN:** coturn (`coturn/turnserver.conf`) on port 3478 over UDP and TCP, with relay ports 49160–49200.
+- **Credentials:** `GET /api/turn-credentials` (signed-in users only) returns ICE servers with short-lived TURN credentials signed by `TURN_SECRET`.
+- **Client:** `usePeerCall` (`src/lib/rtc/use-peer-call.ts`) handles camera/mic, dialing and redialing, answering, hang-up, and reports whether media goes direct or through the relay.
+- **Local dev uses the production PeerJS and coturn servers**, so your local `TURN_SECRET` must match the droplet's.
+
+**Network check:** open `https://hiremealready.study/rtc-test` on two devices, join the same room as A and B, and keep "Force TURN relay" on. "Path: TURN relay" plus video both ways means calls will work on that network. Run it on the venue Wi-Fi before demoing.
+
 ## Deploying
 
 ```bash

@@ -3,10 +3,10 @@
 hiremealready.study {
 	encode zstd gzip
 
-	# Stream A: PeerJS signaling (websocket) goes here, before the catch-all:
-	# handle /peerjs* {
-	# 	reverse_proxy peer:9000
-	# }
+	# PeerJS signaling (HTTP + websocket).
+	handle /peerjs* {
+		reverse_proxy peer:9000
+	}
 
 	reverse_proxy web:3000
 }

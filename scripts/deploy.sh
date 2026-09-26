@@ -15,4 +15,8 @@ rsync -az --delete \
   --exclude .claude --exclude .agents --exclude .windsurf \
   ./ "$HOST:$DIR/"
 
-ssh "$HOST" "cd $DIR && docker compose up -d --build --remove-orphans && docker image prune -f >/dev/null && docker compose ps"
+# rsync replaces files rather than editing them, and single-file bind mounts keep
+# pointing at the old copy, so restart the services that read mounted config.
+ssh "$HOST" "cd $DIR && docker compose up -d --build --remove-orphans \
+  && docker compose restart caddy coturn \
+  && docker image prune -f >/dev/null && docker compose ps"
