@@ -2,6 +2,7 @@ import { HttpError } from "@/lib/api";
 import type { FeedbackInput, PeerEventInput, PeerSession, PeerWrapUp } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { partnerStillThere, touchMatch } from "@/lib/matching";
+import { notify } from "@/lib/notifications";
 import { initialsFor, toQuestionView, toResumeView } from "@/lib/views";
 
 // The call page's side of a matched peer interview (/call/[id] for a PEER interview).
@@ -125,10 +126,21 @@ export async function submitPeerFeedback(interviewId: string, userId: string, in
   if (interview.status === "PENDING" || interview.status === "ABANDONED") {
     throw new HttpError(409, "This interview never started, so there's nothing to rate");
   }
+  const where = { interviewId_authorId: { interviewId, authorId: userId } };
+  const isNew = !(await db.feedback.findUnique({ where, select: { id: true } }));
   await db.feedback.upsert({
-    where: { interviewId_authorId: { interviewId, authorId: userId } },
+    where,
     create: { interviewId, authorId: userId, subjectId: candidate.userId, ...input },
     update: input,
   });
+  if (isNew) {
+    const author = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+    await notify(candidate.userId, {
+      kind: "FEEDBACK_RECEIVED",
+      title: `${author.name} left you feedback`,
+      body: `${interview.company || interview.jobTitle || "Your"} mock interview.`,
+      href: `/history/${interviewId}`,
+    });
+  }
   return getPeerWrapUp(interviewId, userId);
 }
