@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-26T00:00:00Z",
+  "title": "Design System: hire-me-already",
+  "extensions": {
+    "colorMeta": {
+      "manila": { "role": "neutral", "displayName": "Manila Folder", "canonical": "oklch(0.875 0.082 84)", "dark": "oklch(0.255 0.03 76)", "tonalRamp": ["oklch(0.2 0.05 84)", "oklch(0.32 0.07 84)", "oklch(0.45 0.08 84)", "oklch(0.58 0.085 84)", "oklch(0.7 0.085 84)", "oklch(0.8 0.083 84)", "oklch(0.875 0.082 84)", "oklch(0.95 0.04 84)"] },
+      "manila-deep": { "role": "neutral", "displayName": "Manila Deep", "canonical": "oklch(0.79 0.104 78)", "dark": "oklch(0.33 0.045 76)", "tonalRamp": ["oklch(0.2 0.06 78)", "oklch(0.32 0.08 78)", "oklch(0.45 0.095 78)", "oklch(0.58 0.1 78)", "oklch(0.7 0.104 78)", "oklch(0.79 0.104 78)", "oklch(0.87 0.08 78)", "oklch(0.95 0.04 78)"] },
+      "manila-edge": { "role": "neutral", "displayName": "Manila Edge", "canonical": "oklch(0.7 0.105 74)", "dark": "oklch(0.42 0.06 76)" },
+      "manila-ink": { "role": "neutral", "displayName": "Manila Ink", "canonical": "oklch(0.36 0.07 62)", "dark": "oklch(0.84 0.07 84)" },
+      "paper": { "role": "neutral", "displayName": "Bond Paper", "canonical": "oklch(0.992 0.004 95)", "dark": "oklch(0.205 0.022 266)", "tonalRamp": ["oklch(0.2 0.004 95)", "oklch(0.32 0.004 95)", "oklch(0.45 0.004 95)", "oklch(0.58 0.004 95)", "oklch(0.7 0.005 95)", "oklch(0.82 0.006 95)", "oklch(0.93 0.007 95)", "oklch(0.992 0.004 95)"] },
+      "paper-2": { "role": "neutral", "displayName": "Bond Paper Shade", "canonical": "oklch(0.963 0.008 92)", "dark": "oklch(0.24 0.024 266)" },
+      "rule": { "role": "neutral", "displayName": "Blue Rule", "canonical": "oklch(0.84 0.045 245)", "dark": "oklch(0.34 0.04 250)" },
+      "edge": { "role": "neutral", "displayName": "Sheet Edge", "canonical": "oklch(0.86 0.014 250)", "dark": "oklch(0.33 0.025 262)" },
+      "ink": { "role": "primary", "displayName": "Ballpoint Ink", "canonical": "oklch(0.27 0.075 268)", "dark": "oklch(0.955 0.012 95)", "tonalRamp": ["oklch(0.18 0.06 268)", "oklch(0.27 0.075 268)", "oklch(0.38 0.07 268)", "oklch(0.5 0.06 268)", "oklch(0.62 0.05 268)", "oklch(0.74 0.04 268)", "oklch(0.85 0.025 268)", "oklch(0.95 0.012 268)"] },
+      "ink-2": { "role": "primary", "displayName": "Ballpoint Ink, Secondary", "canonical": "oklch(0.44 0.045 266)", "dark": "oklch(0.8 0.025 262)" },
+      "ink-3": { "role": "primary", "displayName": "Ballpoint Ink, Faint", "canonical": "oklch(0.56 0.03 266)", "dark": "oklch(0.68 0.025 262)" },
+      "drawer": { "role": "primary", "displayName": "Drawer Blue-Black", "canonical": "oklch(0.255 0.068 268)", "dark": "oklch(0.155 0.024 266)" },
+      "drawer-2": { "role": "primary", "displayName": "Drawer Hover", "canonical": "oklch(0.32 0.07 268)", "dark": "oklch(0.22 0.03 266)" },
+      "drawer-ink": { "role": "neutral", "displayName": "Drawer Text", "canonical": "oklch(0.96 0.012 95)", "dark": "oklch(0.95 0.012 95)" },
+      "drawer-ink-2": { "role": "neutral", "displayName": "Drawer Text, Secondary", "canonical": "oklch(0.8 0.035 266)", "dark": "oklch(0.74 0.03 262)" },
+      "stamp": { "role": "secondary", "displayName": "Rubber-Stamp Red", "canonical": "oklch(0.52 0.19 29)", "dark": "oklch(0.7 0.16 29)", "tonalRamp": ["oklch(0.25 0.1 29)", "oklch(0.35 0.14 29)", "oklch(0.45 0.18 29)", "oklch(0.52 0.19 29)", "oklch(0.62 0.17 29)", "oklch(0.72 0.13 29)", "oklch(0.84 0.08 29)", "oklch(0.95 0.035 29)"] },
+      "stamp-wash": { "role": "secondary", "displayName": "Stamp Wash", "canonical": "oklch(0.95 0.035 29)", "dark": "oklch(0.3 0.06 29)" },
+      "hi": { "role": "tertiary", "displayName": "Highlighter Lime", "canonical": "oklch(0.925 0.18 118)", "dark": "oklch(0.9 0.17 118)", "tonalRamp": ["oklch(0.26 0.06 118)", "oklch(0.38 0.1 118)", "oklch(0.5 0.13 118)", "oklch(0.62 0.15 118)", "oklch(0.74 0.17 118)", "oklch(0.84 0.18 118)", "oklch(0.925 0.18 118)", "oklch(0.97 0.08 118)"] },
+      "hi-ink": { "role": "tertiary", "displayName": "Ink on Highlighter", "canonical": "oklch(0.26 0.06 128)", "dark": "oklch(0.24 0.06 128)" },
+      "night": { "role": "neutral", "displayName": "Night Desk", "canonical": "oklch(0.17 0.03 266)" },
+      "night-2": { "role": "neutral", "displayName": "Night Sheet", "canonical": "oklch(0.22 0.035 266)" },
+      "night-3": { "role": "neutral", "displayName": "Night Sheet Raised", "canonical": "oklch(0.29 0.04 266)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display (wide)", "purpose": "Dashboard greeting; poster-scale, one per page at most." },
+      "headline": { "displayName": "Headline (wide)", "purpose": "Page titles in the page header; 2rem mobile, 2.625rem from md." },
+      "title": { "displayName": "Title", "purpose": "Folder and sheet headings; 1.5rem mobile, 1.75rem from md." },
+      "body": { "displayName": "Body", "purpose": "Running text; secondary copy at 0.9375rem in ink-2." },
+      "label": { "displayName": "Label (condensed caps)", "purpose": "Folder tabs, table headers, definition terms, small in-sheet section headings, tags. Never an eyebrow above a heading." },
+      "stamp": { "displayName": "Stamp (condensed caps)", "purpose": "Rubber stamp text; size set per stamp." }
+    },
+    "shadows": [
+      { "name": "sheet", "value": "0 1px 0 var(--shade-soft), 0 10px 22px -14px var(--shade)", "purpose": "Bond-paper sheets, tab panels, dialogs." },
+      { "name": "folder", "value": "0 1px 0 var(--shade-soft), 0 14px 28px -18px var(--shade)", "purpose": "Manila folder bodies." },
+      { "name": "pocket-lip", "value": "0 -1px 0 var(--manila-edge), 0 -10px 18px -14px var(--shade)", "purpose": "Folder front pocket overlapping its sheet." },
+      { "name": "focus", "value": "outline 2px solid var(--ink), offset 2px; 0 0 0 5px color-mix(in oklch, var(--hi) 85%, transparent)", "purpose": "Global focus-visible ring; lime outline without halo inside drawer and call room." }
+    ],
+    "motion": [
+      { "name": "ease-out-quint", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "State transitions (90-160ms) and the stamp landing." },
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Sheets sliding in; checkbox tick." },
+      { "name": "stamp-land", "value": "280ms ease-out-quint; scale 1.9 -> 0.97 -> 1 at the stamp's rotation", "purpose": "The signature thud when an outcome stamp first appears." },
+      { "name": "sheet-in", "value": "240ms ease-out-expo; translateY(6px) and opacity 0.35 -> rest", "purpose": "A sheet sliding out of its folder." },
+      { "name": "sweep", "value": "1.4s ease-out-quint infinite", "purpose": "Loading sweep across blank ruled sheets." },
+      { "name": "reduced-motion", "value": "all animation and transition durations 1ms, single iteration", "purpose": "prefers-reduced-motion: reduce." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid ink block; the one primary action in a folder or form.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Set up an AI interview</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.5rem; padding: 0 1rem; border-radius: 4px; border: 1.5px solid transparent; font-family: var(--font-sans, Archivo, sans-serif); font-size: 0.9375rem; font-weight: 600; line-height: 1.1; cursor: pointer; transition: background-color 150ms cubic-bezier(0.22,1,0.36,1), border-color 150ms cubic-bezier(0.22,1,0.36,1), transform 90ms cubic-bezier(0.22,1,0.36,1); } .ds-btn-primary { background: var(--ink, oklch(0.27 0.075 268)); color: var(--paper, oklch(0.992 0.004 95)); border-color: var(--ink, oklch(0.27 0.075 268)); } .ds-btn-primary:hover { background: color-mix(in oklch, var(--ink, oklch(0.27 0.075 268)) 86%, var(--paper, oklch(0.992 0.004 95))); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid var(--ink, oklch(0.27 0.075 268)); outline-offset: 2px; box-shadow: 0 0 0 5px color-mix(in oklch, var(--hi, oklch(0.925 0.18 118)) 85%, transparent); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Paper button with an ink stroke for supporting actions.",
+      "html": "<button class=\"ds-btn2\">Find people</button>",
+      "css": ".ds-btn2 { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 1rem; border-radius: 4px; background: var(--paper, oklch(0.992 0.004 95)); color: var(--ink, oklch(0.27 0.075 268)); border: 1.5px solid color-mix(in oklch, var(--ink, oklch(0.27 0.075 268)) 55%, transparent); font-family: var(--font-sans, Archivo, sans-serif); font-size: 0.9375rem; font-weight: 600; cursor: pointer; transition: background-color 150ms cubic-bezier(0.22,1,0.36,1), border-color 150ms cubic-bezier(0.22,1,0.36,1); } .ds-btn2:hover { border-color: var(--ink, oklch(0.27 0.075 268)); background: var(--paper-2, oklch(0.963 0.008 92)); } .ds-btn2:focus-visible { outline: 2px solid var(--ink, oklch(0.27 0.075 268)); outline-offset: 2px; box-shadow: 0 0 0 5px color-mix(in oklch, var(--hi, oklch(0.925 0.18 118)) 85%, transparent); }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Stamp-red fill for destructive acts only.",
+      "html": "<button class=\"ds-btn-danger\">Delete account</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 1rem; border-radius: 4px; background: var(--stamp, oklch(0.52 0.19 29)); color: oklch(0.99 0.004 95); border: 1.5px solid var(--stamp, oklch(0.52 0.19 29)); font-family: var(--font-sans, Archivo, sans-serif); font-size: 0.9375rem; font-weight: 600; cursor: pointer; transition: background-color 150ms cubic-bezier(0.22,1,0.36,1); } .ds-btn-danger:hover { background: color-mix(in oklch, var(--stamp, oklch(0.52 0.19 29)) 85%, black); } .ds-btn-danger:focus-visible { outline: 2px solid var(--ink, oklch(0.27 0.075 268)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Paper field with ink stroke; lime halo on focus, red stroke when invalid.",
+      "html": "<label class=\"ds-label\">Company<input class=\"ds-input\" placeholder=\"e.g. Northwind Logistics\"></label>",
+      "css": ".ds-label { display: block; font-family: var(--font-sans, Archivo, sans-serif); font-size: 0.875rem; font-weight: 600; color: var(--ink, oklch(0.27 0.075 268)); } .ds-input { display: block; width: 100%; margin-top: 0.375rem; min-height: 2.75rem; padding: 0.55rem 0.75rem; border-radius: 3px; background: var(--paper, oklch(0.992 0.004 95)); color: var(--ink, oklch(0.27 0.075 268)); border: 1.5px solid color-mix(in oklch, var(--ink, oklch(0.27 0.075 268)) 28%, transparent); font: inherit; font-size: 1rem; font-weight: 400; transition: border-color 150ms cubic-bezier(0.22,1,0.36,1); } .ds-input::placeholder { color: var(--ink-3, oklch(0.56 0.03 266)); } .ds-input:hover { border-color: color-mix(in oklch, var(--ink, oklch(0.27 0.075 268)) 50%, transparent); } .ds-input:focus-visible { outline: none; border-color: var(--ink, oklch(0.27 0.075 268)); box-shadow: 0 0 0 4px color-mix(in oklch, var(--hi, oklch(0.925 0.18 118)) 80%, transparent); } .ds-input[aria-invalid=\"true\"] { border-color: var(--stamp, oklch(0.52 0.19 29)); }"
+    },
+    {
+      "name": "Drawer Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Blue-black drawer; the active item takes the highlighter swipe.",
+      "html": "<nav class=\"ds-drawer\"><a class=\"ds-nav ds-nav-active\" aria-current=\"page\" href=\"#\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg>Home</a><a class=\"ds-nav\" href=\"#\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z\"/></svg>History</a></nav>",
+      "css": ".ds-drawer { display: flex; flex-direction: column; gap: 0.25rem; width: 15rem; padding: 0.75rem; background: var(--drawer, oklch(0.255 0.068 268)); } .ds-nav { display: flex; align-items: center; gap: 0.75rem; min-height: 2.75rem; padding: 0 0.75rem; border-radius: 4px; color: var(--drawer-ink-2, oklch(0.8 0.035 266)); font-family: var(--font-sans, Archivo, sans-serif); font-size: 0.9375rem; font-weight: 600; text-decoration: none; transition: background-color 150ms, color 150ms; } .ds-nav:hover { background: var(--drawer-2, oklch(0.32 0.07 268)); color: var(--drawer-ink, oklch(0.96 0.012 95)); } .ds-nav-active, .ds-nav-active:hover { font-weight: 700; color: var(--hi-ink, oklch(0.26 0.06 128)); background: linear-gradient(100deg, transparent 0 2%, var(--hi, oklch(0.925 0.18 118)) 4% 96%, transparent 98%); } .ds-nav:focus-visible { outline: 2px solid var(--hi, oklch(0.925 0.18 118)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Folder Tabs",
+      "kind": "nav",
+      "refersTo": "folder-tab",
+      "description": "Manila condensed-caps tabs over a paper panel; the selected tab becomes the front sheet.",
+      "html": "<div class=\"ds-ftabs\" role=\"tablist\"><button class=\"ds-ftab\" role=\"tab\" aria-selected=\"true\">Friends <span class=\"ds-ftab-count\">12</span></button><button class=\"ds-ftab\" role=\"tab\" aria-selected=\"false\">Requests <span class=\"ds-ftab-count\">2</span></button></div><div class=\"ds-ftab-panel\">Panel content</div>",
+      "css": ".ds-ftabs { display: flex; gap: 0.25rem; } .ds-ftab { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2.5rem; padding: 0 1rem; border: 0; border-radius: 6px 6px 0 0; background: var(--manila-deep, oklch(0.79 0.104 78)); color: var(--manila-ink, oklch(0.36 0.07 62)); font-family: var(--font-sans, Archivo, sans-serif); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; font-variation-settings: \"wdth\" 74; cursor: pointer; transition: background-color 160ms cubic-bezier(0.22,1,0.36,1); } .ds-ftab:hover { background: color-mix(in oklch, var(--manila-deep, oklch(0.79 0.104 78)) 70%, var(--paper, oklch(0.992 0.004 95))); } .ds-ftab[aria-selected=\"true\"] { background: var(--paper, oklch(0.992 0.004 95)); color: var(--ink, oklch(0.27 0.075 268)); } .ds-ftab:focus-visible { outline: 2px solid var(--ink, oklch(0.27 0.075 268)); outline-offset: 2px; } .ds-ftab-count { font-variant-numeric: tabular-nums; font-size: 0.6875rem; line-height: 1; padding: 0.2rem 0.35rem; border-radius: 3px; background: color-mix(in oklch, currentColor 14%, transparent); } .ds-ftab-panel { padding: 1.5rem; background: var(--paper, oklch(0.992 0.004 95)); color: var(--ink, oklch(0.27 0.075 268)); border-radius: 0 3px 3px 3px; box-shadow: 0 1px 0 oklch(0.32 0.07 70 / 0.12), 0 10px 22px -14px oklch(0.32 0.07 70 / 0.34); }"
+    },
+    {
+      "name": "Practice Folder",
+      "kind": "card",
+      "refersTo": "folder",
+      "description": "A manila folder with a blank tab, a sheet tucked inside, and a front pocket holding the one action.",
+      "html": "<article class=\"ds-folder-wrap\"><div class=\"ds-folder-tab\" aria-hidden=\"true\"></div><div class=\"ds-folder\"><div class=\"ds-folder-sheet\"><h2>Practice with AI</h2><p>Name the company and role. The AI writes the questions and scores every answer.</p></div><div class=\"ds-folder-pocket\"><button class=\"ds-pocket-btn\">Set up an AI interview</button><p>Available any time. About 25 minutes.</p></div></div></article>",
+      "css": ".ds-folder-wrap { position: relative; padding-top: 1.75rem; max-width: 22rem; font-family: var(--font-sans, Archivo, sans-serif); } .ds-folder-tab { position: absolute; left: 0; top: 0; width: 9rem; height: 1.75rem; background: var(--manila-deep, oklch(0.79 0.104 78)); border-radius: 6px 6px 0 0; clip-path: polygon(0 0, calc(100% - 0.9rem) 0, 100% 100%, 0 100%); } .ds-folder { background: var(--manila-deep, oklch(0.79 0.104 78)); border-radius: 0 6px 6px 6px; padding: 0.75rem 0.75rem 0; box-shadow: 0 1px 0 oklch(0.32 0.07 70 / 0.12), 0 14px 28px -18px oklch(0.32 0.07 70 / 0.34); } .ds-folder-sheet { background: var(--paper, oklch(0.992 0.004 95)); color: var(--ink, oklch(0.27 0.075 268)); border-radius: 3px; padding: 1.5rem 1.25rem 4rem; } .ds-folder-sheet h2 { margin: 0; font-size: 1.5rem; line-height: 1.25; font-weight: 800; letter-spacing: -0.015em; } .ds-folder-sheet p { margin: 0.75rem 0 0; font-size: 0.9375rem; color: var(--ink-2, oklch(0.44 0.045 266)); } .ds-folder-pocket { position: relative; margin: -2.5rem -0.75rem 0; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; background: var(--manila-deep, oklch(0.79 0.104 78)); border-radius: 0 0 6px 6px; box-shadow: 0 -1px 0 var(--manila-edge, oklch(0.7 0.105 74)), 0 -10px 18px -14px oklch(0.32 0.07 70 / 0.34); } .ds-folder-pocket p { margin: 0; font-size: 0.8125rem; color: var(--manila-ink, oklch(0.36 0.07 62)); } .ds-pocket-btn { min-height: 3rem; border-radius: 4px; border: 1.5px solid var(--ink, oklch(0.27 0.075 268)); background: var(--ink, oklch(0.27 0.075 268)); color: var(--paper, oklch(0.992 0.004 95)); font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer; } .ds-pocket-btn:hover { background: color-mix(in oklch, var(--ink, oklch(0.27 0.075 268)) 86%, var(--paper, oklch(0.992 0.004 95))); } .ds-pocket-btn:focus-visible { outline: 2px solid var(--ink, oklch(0.27 0.075 268)); outline-offset: 2px; box-shadow: 0 0 0 5px color-mix(in oklch, var(--hi, oklch(0.925 0.18 118)) 85%, transparent); }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Outlined condensed-caps label for interview type and status.",
+      "html": "<span class=\"ds-tag\">AI</span> <span class=\"ds-tag\">Human</span>",
+      "css": ".ds-tag { display: inline-flex; align-items: center; height: 1.375rem; padding: 0 0.45rem; border-radius: 3px; border: 1.5px solid currentColor; color: var(--ink, oklch(0.27 0.075 268)); font-family: var(--font-sans, Archivo, sans-serif); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-variation-settings: \"wdth\" 76; white-space: nowrap; }"
+    },
+    {
+      "name": "Rubber Stamp",
+      "kind": "custom",
+      "refersTo": "stamp",
+      "description": "Signature outcome mark: rotated double-rule condensed caps that land with a short thud. Ink by default; red only for RETURNED and REC.",
+      "html": "<span class=\"ds-stamp\">Filed</span> <span class=\"ds-stamp ds-stamp-red\">Returned</span> <span class=\"ds-stamp ds-stamp-round\"><b>4.2</b><small>of 5</small></span>",
+      "css": ".ds-stamp { --r: -4deg; display: inline-flex; align-items: center; gap: 0.35em; padding: 0.2em 0.55em 0.18em; border: 2.5px solid currentColor; outline: 1px solid currentColor; outline-offset: 2px; border-radius: 3px; color: var(--ink, oklch(0.27 0.075 268)); font-family: var(--font-sans, Archivo, sans-serif); font-size: 1rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; font-variation-settings: \"wdth\" 70; line-height: 1; transform: rotate(var(--r)); animation: ds-stamp-land 280ms cubic-bezier(0.22,1,0.36,1) both; } .ds-stamp-red { color: var(--stamp, oklch(0.52 0.19 29)); --r: -6deg; } .ds-stamp-round { --r: -8deg; width: 104px; height: 104px; border-width: 3.5px; border-radius: 999px; outline-offset: 3px; padding: 0; flex-direction: column; justify-content: center; gap: 0.1em; font-variant-numeric: tabular-nums; } .ds-stamp-round b { font-size: 37px; letter-spacing: 0.01em; } .ds-stamp-round small { font-size: 10.4px; } @keyframes ds-stamp-land { 0% { opacity: 0; transform: rotate(var(--r)) scale(1.9); } 55% { opacity: 1; transform: rotate(var(--r)) scale(0.97); } 100% { opacity: 1; transform: rotate(var(--r)) scale(1); } } @media (prefers-reduced-motion: reduce) { .ds-stamp { animation: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Application File",
+    "overview": "Every interview is a file on the candidate's own desk: briefed, rehearsed, stamped, filed. The working ground is manila folder stock with a faint fibre grain; content lives on bond-white sheets that sit a few millimetres above it; the drawer down the left edge is ballpoint blue-black. Outcomes are not badges or pills: they are rubber stamps, rotated a few degrees, with a double rule and worn ink, and they land with a short thud.\n\nThe system is built from five desk materials and nothing else. One grotesk (Archivo, variable width) does every job: stretched wide at poster scale for page titles, condensed to caps for folder tabs, labels and stamps. Folders are real objects (a tab with a cut corner, a front pocket laid over the sheet that carries the one action); sheets carry paper clips; the current thing is marked with a highlighter swipe. The night desk flips paper to ink rather than inventing a separate dark palette, and the call room plus the drawer stay dark in both themes.\n\nDensity is calm and tactile: generous sheet padding, a 76rem working column, one primary action per folder. Motion is physical and brief; sheets slide from folders, stamps thud, nothing bounces.",
+    "keyCharacteristics": [
+      "Five materials only: manila, bond paper, ballpoint ink, stamp red, highlighter lime. There is no green.",
+      "One variable grotesk; width axis (not a second family) carries hierarchy.",
+      "Rubber stamps are the signature mark for outcomes and states.",
+      "Depth comes from stacked paper, never from floating cards.",
+      "Fixed shell regions: drawer or tab bar, top bar, manila ground. Navigation swaps what's in the folder, never the frame."
+    ],
+    "rules": [
+      { "name": "The Five Materials Rule", "body": "Manila, bond paper, ballpoint ink, stamp red, highlighter lime. There is no green, no success colour, no brand gradient. A positive outcome is ink, stated in words or a stamp.", "section": "colors" },
+      { "name": "The Red Is Trouble Rule", "body": "Stamp red means recording, error, or a destructive act. It never colours a score, a rating, or a neutral status.", "section": "colors" },
+      { "name": "The One Highlighter Rule", "body": "Lime marks the one current thing on screen (active nav, the highlighted fix, the logo). It is never a fill for avatars, tags, charts or decoration.", "section": "colors" },
+      { "name": "The Night Desk Rule", "body": "Dark mode re-points the same tokens (paper becomes ink-dark, ink becomes paper-light); components never branch on theme. Regions that are always dark (drawer, call room) re-point tokens locally, and the candidate's file inside the call room is always day stock.", "section": "colors" },
+      { "name": "The One Grotesk Rule", "body": "Hierarchy comes from Archivo's width axis and weight, never from a second family.", "section": "typography" },
+      { "name": "The No Eyebrow Rule", "body": "Nothing sits above a heading to announce it. Condensed caps labels are headings or field terms in their own right; a folder tab that would restate the heading below it stays blank.", "section": "typography" },
+      { "name": "The Tabular Score Rule", "body": "Scores, counts and tables use tabular figures.", "section": "typography" },
+      { "name": "The Paper Stack Rule", "body": "Elevation is only ever a sheet on a folder on the desk. If a surface isn't paper or a folder, it doesn't get a shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build every surface from the five materials: manila ground, paper sheets, ink text and drawer, stamp red for trouble, lime for the current thing.",
+      "Do set scores in ink, as round stamps with tabular figures.",
+      "Do mark outcomes with a rotated rubber stamp that lands once, and respect reduced motion.",
+      "Do distinguish presence by fill and ring (solid ink online, ink ring away, empty thin ring offline), never by hue.",
+      "Do give each folder one primary action, placed in its front pocket.",
+      "Do get hierarchy from Archivo's width axis: wide for titles, condensed caps for tabs, labels and stamps.",
+      "Do re-point tokens for dark regions instead of branching components on theme."
+    ],
+    "donts": [
+      "Don't introduce green or any success hue; there is no green in this file.",
+      "Don't use stamp red for scores, ratings, or neutral status.",
+      "Don't use lime for avatar fills, tags, charts or decoration; it marks the current thing only.",
+      "Don't put an eyebrow or kicker label above a heading, and leave a folder tab blank rather than restating the heading beneath it.",
+      "Don't float rounded stat cards or glow shadows; elevation is paper on a folder on a desk.",
+      "Don't add a second typeface.",
+      "Don't bounce; motion is sheets sliding and stamps thudding."
+    ]
+  }
+}
