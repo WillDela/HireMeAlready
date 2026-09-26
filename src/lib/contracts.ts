@@ -1,0 +1,196 @@
+import { z } from "zod";
+
+// Shared shapes between streams. Owner: Stream B. After the freeze, changes are
+// additive only — announce them in team chat before merging.
+//
+// Every shape is a zod schema so API routes can validate input and Gemini calls can
+// pass `z.toJSONSchema(Schema)` as a response schema.
+
+// ---------- Enums (mirror prisma/schema.prisma) ----------
+
+export const InterviewRole = z.enum(["INTERVIEWER", "INTERVIEWEE"]);
+export type InterviewRole = z.infer<typeof InterviewRole>;
+
+export const InterviewMode = z.enum(["AI", "PEER"]);
+export type InterviewMode = z.infer<typeof InterviewMode>;
+
+export const InterviewStatus = z.enum(["PENDING", "ACTIVE", "COMPLETED", "ABANDONED"]);
+export type InterviewStatus = z.infer<typeof InterviewStatus>;
+
+export const JobStatus = z.enum(["PENDING", "PROCESSING", "READY", "FAILED"]);
+export type JobStatus = z.infer<typeof JobStatus>;
+
+export const Speaker = z.enum(["AI", "INTERVIEWER", "INTERVIEWEE"]);
+export type Speaker = z.infer<typeof Speaker>;
+
+// ---------- AI outputs (Stream C produces, everyone reads) ----------
+
+export const ParsedResume = z.object({
+  name: z.string().optional(),
+  summary: z.string(),
+  skills: z.array(z.string()),
+  experience: z.array(
+    z.object({
+      company: z.string(),
+      title: z.string(),
+      start: z.string().optional(),
+      end: z.string().optional(),
+      bullets: z.array(z.string()),
+    }),
+  ),
+  education: z.array(
+    z.object({
+      school: z.string(),
+      degree: z.string().optional(),
+      year: z.string().optional(),
+    }),
+  ),
+});
+export type ParsedResume = z.infer<typeof ParsedResume>;
+
+export const QuestionCategory = z.enum(["behavioral", "technical", "role-specific"]);
+export type QuestionCategory = z.infer<typeof QuestionCategory>;
+
+export const GeneratedQuestion = z.object({
+  text: z.string(),
+  category: QuestionCategory,
+  rationale: z.string().optional(),
+  sourceUrl: z.string().optional(),
+});
+export type GeneratedQuestion = z.infer<typeof GeneratedQuestion>;
+
+export const TranscriptLine = z.object({
+  speaker: Speaker,
+  userId: z.string().optional(),
+  startMs: z.number().int(),
+  endMs: z.number().int().optional(),
+  text: z.string(),
+});
+export type TranscriptLine = z.infer<typeof TranscriptLine>;
+
+const Score = z.number().min(0).max(100);
+
+export const AnalysisResult = z.object({
+  summary: z.string(),
+  overallScore: Score,
+  scores: z.object({
+    communication: Score,
+    structure: Score,
+    technicalDepth: Score,
+    relevance: Score,
+  }),
+  strengths: z.array(z.string()),
+  improvements: z.array(z.string()),
+  perQuestion: z.array(
+    z.object({
+      question: z.string(),
+      answerSummary: z.string(),
+      feedback: z.string(),
+      score: Score,
+    }),
+  ),
+});
+export type AnalysisResult = z.infer<typeof AnalysisResult>;
+
+// ---------- API request bodies ----------
+
+export const CreateInterviewInput = z.object({
+  mode: InterviewMode,
+  jobTitle: z.string().min(1),
+  company: z.string().optional(),
+  jobDescription: z.string().optional(),
+  grounded: z.boolean().default(false), // use Google Search grounding for company-specific questions
+});
+export type CreateInterviewInput = z.infer<typeof CreateInterviewInput>;
+
+export const JoinQueueInput = z.object({
+  role: InterviewRole,
+  jobTitle: z.string().optional(),
+});
+export type JoinQueueInput = z.infer<typeof JoinQueueInput>;
+
+export const FeedbackInput = z.object({
+  rating: z.number().int().min(1).max(5).optional(),
+  strengths: z.string().min(1),
+  improvements: z.string().min(1),
+});
+export type FeedbackInput = z.infer<typeof FeedbackInput>;
+
+export const ReportInput = z.object({
+  reason: z.string().min(1),
+  details: z.string().optional(),
+});
+export type ReportInput = z.infer<typeof ReportInput>;
+
+// ---------- API responses ----------
+
+// GET /api/queue, polled every ~2s while waiting.
+export type QueueState =
+  | { state: "idle" }
+  | { state: "waiting"; since: string }
+  | {
+      state: "matched";
+      interviewId: string;
+      role: InterviewRole;
+      selfPeerId: string;
+      remotePeerId: string;
+    }
+  | { state: "expired" };
+
+// GET /api/turn-credentials
+export type IceServersResponse = { iceServers: RTCIceServer[]; ttl: number };
+
+// POST /api/resume/upload-url
+export type UploadUrlResponse = { uploadUrl: string; storageKey: string };
+
+// POST /api/ai/signed-url
+export type AiSessionResponse = {
+  signedUrl: string;
+  dynamicVariables: Record<string, string>;
+};
+
+export type ParticipantSummary = {
+  userId: string;
+  name: string;
+  role: InterviewRole;
+  // Only present when that user's Profile.shareContact is true.
+  contact?: { email: string; linkedinUrl?: string };
+};
+
+// GET /api/interviews (history list)
+export type InterviewListItem = {
+  id: string;
+  mode: InterviewMode;
+  status: InterviewStatus;
+  jobTitle: string | null;
+  company: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  myRole: InterviewRole;
+  partnerName: string | null; // null for AI interviews
+  overallScore: number | null;
+};
+
+// GET /api/interviews/:id
+export type InterviewDetail = {
+  id: string;
+  mode: InterviewMode;
+  status: InterviewStatus;
+  jobTitle: string | null;
+  company: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  participants: ParticipantSummary[];
+  questions: GeneratedQuestion[];
+  transcript: TranscriptLine[];
+  transcriptStatus: JobStatus;
+  analysis: { status: JobStatus; result: AnalysisResult | null } | null;
+  feedback: (FeedbackInput & { authorName: string; createdAt: string })[];
+};
+
+// ---------- Helpers ----------
+
+/** Deterministic PeerJS id, so both sides know each other's id from the match alone. */
+export function peerIdFor(interviewId: string, role: InterviewRole): string {
+  return `${interviewId}-${role.toLowerCase()}`;
+}
