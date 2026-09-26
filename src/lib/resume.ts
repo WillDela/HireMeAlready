@@ -2,6 +2,7 @@ import { ParsedResume, RESUME_MAX_BYTES } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { embedText, parseResume } from "@/lib/gemini";
 import { createDownloadUrl, getObjectBuffer } from "@/lib/storage";
+import { notify } from "@/lib/notifications";
 import { setResumeEmbedding } from "@/lib/vector";
 import { toResumeView } from "@/lib/views";
 
@@ -38,6 +39,12 @@ export async function processResume(resumeId: string) {
     if (pdf.subarray(0, 5).toString("latin1") !== "%PDF-") throw new Error("Not a PDF");
     parsed = ParsedResume.parse(await parseResume(pdf));
     await db.resume.update({ where: { id: resumeId }, data: { parsed, parseStatus: "READY" } });
+    await notify(resume.userId, {
+      kind: "RESUME_PARSED",
+      title: "Resume parsed",
+      body: `${plural(parsed.skills.length, "skill")} and ${plural(parsed.experience.length, "role")} found. Check they look right.`,
+      href: "/resume",
+    });
   } catch (err) {
     console.error(`Resume ${resumeId} failed to parse`, err);
     await db.resume.update({ where: { id: resumeId }, data: { parseStatus: "FAILED" } });
@@ -45,6 +52,8 @@ export async function processResume(resumeId: string) {
   }
   await embedResume(resumeId, parsed);
 }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export async function embedResume(resumeId: string, parsed: ParsedResume) {
   try {

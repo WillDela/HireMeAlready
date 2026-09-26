@@ -175,7 +175,7 @@ function toSummary(iv: InterviewRow, userId: string, analysis: AnalysisResult | 
 }
 
 /** AnalysisResult scores are 0-100; the UI shows them out of 5. */
-function outOf5(score: number) {
+export function outOf5(score: number) {
   return Math.round(score / 2) / 10;
 }
 

@@ -155,7 +155,7 @@ export type FeedbackInput = z.infer<typeof FeedbackInput>;
 
 export const ReportInput = z.object({
   reason: z.string().min(1),
-  details: z.string().optional(),
+  details: z.string().max(500).optional(), // the Report dialog's limit
 });
 export type ReportInput = z.infer<typeof ReportInput>;
 
@@ -295,6 +295,13 @@ export type FriendsResponse = {
 export type PersonSearchResult = PersonSummary & {
   status: "none" | "incoming" | "outgoing" | "friends";
 };
+
+// ---------- Notifications ----------
+
+// PATCH /api/notifications: one notification, or all of yours when `id` is omitted.
+// GET and PATCH both return Notification[] (src/lib/mock.ts).
+export const MarkNotificationsReadInput = z.object({ id: z.string().optional() });
+export type MarkNotificationsReadInput = z.infer<typeof MarkNotificationsReadInput>;
 
 // ---------- Admin ----------
 

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
-import { friendRequests } from "@/lib/mock";
-import { useApiResource } from "@/lib/use-api";
-import type { HistoryItem } from "@/lib/views";
+import type { FriendsResponse } from "@/lib/contracts";
+import { apiFetch, useApiResource } from "@/lib/use-api";
+import { type HistoryItem, timeAgo } from "@/lib/views";
 import { FriendRow } from "@/components/FriendRow";
 import { TypeTag } from "@/components/InterviewTable";
 import { PracticeFolder } from "@/components/PracticeFolder";
@@ -49,10 +49,32 @@ function LastScore({ lastInterview }: { lastInterview: HistoryItem }) {
   );
 }
 
-function Requests({ empty }: { empty: boolean }) {
-  const [pending, setPending] = useState(friendRequests.filter((r) => r.direction === "incoming"));
+function Requests() {
+  const { status, data, retry, mutate } = useApiResource<FriendsResponse>("/api/friends", {
+    isEmpty: (d) => d.incoming.length === 0,
+  });
   const [handled, setHandled] = useState<Record<string, "accepted" | "declined">>({});
-  const list = empty ? [] : pending;
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const list = status === "ready" ? (data?.incoming ?? []) : [];
+
+  async function respond(requestId: string, decision: "ACCEPTED" | "DECLINED") {
+    setBusy(requestId);
+    setFailed(null);
+    try {
+      const next = await apiFetch<FriendsResponse>(`/api/friends/${requestId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: decision }),
+      });
+      setHandled((h) => ({ ...h, [requestId]: decision === "ACCEPTED" ? "accepted" : "declined" }));
+      // Leave the stamp up for a moment before the row drops off the list.
+      window.setTimeout(() => mutate(next), 1600);
+    } catch {
+      setFailed(requestId);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <section aria-labelledby="req-heading" className="sheet relative">
@@ -66,7 +88,11 @@ function Requests({ empty }: { empty: boolean }) {
           All requests
         </Link>
       </div>
-      {list.length === 0 ? (
+      {status === "loading" ? (
+        <LoadingSheets label="Checking for requests…" layout="list" rows={1} className="p-5" />
+      ) : status === "error" ? (
+        <ErrorReturned compact title="Your requests didn't load" onRetry={retry} />
+      ) : list.length === 0 ? (
         <EmptyFolder compact title="No pending requests" action={<ButtonLink href="/friends?tab=find" variant="secondary" size="sm">Find people</ButtonLink>}>
           Friends can invite you straight into a practice interview.
         </EmptyFolder>
@@ -74,19 +100,21 @@ function Requests({ empty }: { empty: boolean }) {
         <ul className="divide-y divide-edge">
           {list.map((r) => (
             <FriendRow
-              key={r.id}
+              key={r.requestId}
               person={r}
-              meta={r.mutual ? `${r.mutual} mutual ${r.mutual === 1 ? "friend" : "friends"}` : `Sent ${r.sent}`}
+              meta={failed === r.requestId ? <span role="alert" className="font-semibold text-stamp">That didn&apos;t go through. Try again.</span> : `Sent ${timeAgo(new Date(r.sentAt))}`}
               actions={
-                handled[r.id] ? (
+                handled[r.requestId] ? (
                   <p className="text-[0.875rem] font-semibold text-ink-2" role="status">
-                    {handled[r.id] === "accepted" ? "Added to friends" : "Declined"}
+                    {handled[r.requestId] === "accepted" ? "Added to friends" : "Declined"}
                   </p>
                 ) : (
                   <>
                     <Button
                       size="sm"
-                      onClick={() => setHandled((h) => ({ ...h, [r.id]: "accepted" }))}
+                      loading={busy === r.requestId}
+                      disabled={busy !== null}
+                      onClick={() => respond(r.requestId, "ACCEPTED")}
                       aria-label={`Accept ${r.name}`}
                     >
                       Accept
@@ -94,10 +122,8 @@ function Requests({ empty }: { empty: boolean }) {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => {
-                        setHandled((h) => ({ ...h, [r.id]: "declined" }));
-                        window.setTimeout(() => setPending((p) => p.filter((x) => x.id !== r.id)), 1600);
-                      }}
+                      disabled={busy !== null}
+                      onClick={() => respond(r.requestId, "DECLINED")}
                       aria-label={`Decline ${r.name}`}
                     >
                       Decline
@@ -181,7 +207,7 @@ export default function DashboardPage() {
 
         {status === "loading" || status === "error" ? null : (
           <div className="lg:col-span-3">
-            <Requests empty={status === "empty"} />
+            <Requests />
           </div>
         )}
       </div>
