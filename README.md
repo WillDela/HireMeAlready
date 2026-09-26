@@ -43,7 +43,7 @@ Shared interfaces live in `src/lib/contracts.ts` (zod schemas + types). `src/lib
 
 ## UI and mock data
 
-The UI came from the [hire-me-already](https://github.com/alejandro0955/hire-me-already) mockup. Real so far: sign in, sign up and sign out (Better Auth), the signed-in user and profile, resume upload and parsing (`/resume`, onboarding), and the profile and privacy sections of settings. Everything else still reads from `src/lib/mock.ts` through `useMockResource()` (`src/lib/mock-state.ts`) until its API route exists. That includes the dashboard, practice setup, the AI and live call screens, history, friends, notifications and admin reports. To move a screen over, have its route return the shape the screen already uses (mappers live in `src/lib/views.ts`) and swap `useMockResource` for `useApiResource` (`src/lib/use-api.ts`), which returns the same `{ status, data, retry }`. `?state=loading|empty|error` (or the State preview button) forces each screen's loading, empty and error states for review.
+The UI came from the [hire-me-already](https://github.com/alejandro0955/hire-me-already) mockup. Real so far: sign in, sign up and sign out (Better Auth), the signed-in user and profile, resume upload and parsing (`/resume`, onboarding), and the profile and privacy sections of settings, and live practice with a person (`/practice/live` through `/call/[id]`, see below). Everything else still reads from `src/lib/mock.ts` through `useMockResource()` (`src/lib/mock-state.ts`) until its API route exists. That includes the dashboard, AI practice setup, the AI call screen, the wrap-up, history, friends, notifications and admin reports. To move a screen over, have its route return the shape the screen already uses (mappers live in `src/lib/views.ts`) and swap `useMockResource` for `useApiResource` (`src/lib/use-api.ts`), which returns the same `{ status, data, retry }`. `?state=loading|empty|error` (or the State preview button) forces each screen's loading, empty and error states for review.
 
 Client components get the signed-in user from `useCurrentUser()` (`src/components/shell/CurrentUserProvider.tsx`). The `(app)`, `call` and `onboarding` layouts provide it after `requirePageUser()` checks the session.
 
@@ -69,6 +69,14 @@ The `ufw` firewall allows only: 22 (SSH), 80/443 (Caddy), 3478 tcp+udp and 5349 
 - **Credentials:** `GET /api/turn-credentials` (signed-in users only) returns ICE servers with short-lived TURN credentials signed by `TURN_SECRET`.
 - **Client:** `usePeerCall` (`src/lib/rtc/use-peer-call.ts`) handles camera/mic, dialing and redialing, answering, hang-up, and reports whether media goes direct or through the relay.
 - **Local dev uses the production PeerJS and coturn servers**, so your local `TURN_SECRET` must match the droplet's.
+
+**Live matching and the call hand-off:**
+
+1. `/practice/live` sends `POST /api/queue` (role, plus job title and company for interviewees), then polls `GET /api/queue` every 2 s through search, match and lobby. Each poll is a heartbeat and a match attempt (`src/lib/matching.ts`): the partner is someone WAITING in the opposite role who polled in the last 15 s, closest resume embedding first (pgvector), then first come, first served. Both queue rows are locked in one transaction, so two simultaneous polls can't double-match.
+2. A match creates a PEER `Interview` with two `Participant`s whose `peerId`s come from `peerIdFor()`, and generates the interviewer's suggested questions in the background.
+3. `DELETE /api/queue` (Cancel, leaving the page) abandons a match that hasn't started. A matched partner that stops polling for 30 s counts as gone too. Either way, the other person goes back to the front of the line with `partnerLeft`.
+4. Joining from the lobby opens `/call/{interviewId}`. Ids that aren't in `callSessions` (mock.ts) render the **peer branch** (`src/app/call/[id]/PeerCall.tsx`, shared with Stream A and the AI-interviews stream): it polls `GET /api/interviews/{id}/peer` for the `PeerSession` (role, peer ids, partner, and for the interviewer the candidate's resume and questions), gets TURN credentials, and runs `usePeerCall`. The interviewer dials.
+5. `PATCH /api/interviews/{id}/peer` records `{ event: "connected" }` (the first one makes the interview ACTIVE) and `{ event: "left" }` (COMPLETED, or ABANDONED if it never started). Leave currently goes to `/dashboard`; it moves to `/call/{id}/wrap-up` once the wrap-up and feedback routes land.
 
 **Network check:** open `https://hiremealready.study/rtc-test` on two devices, join the same room as A and B, and keep "Force TURN relay" on. "Path: TURN relay" plus video both ways means calls will work on that network. Run it on the venue Wi-Fi before demoing.
 

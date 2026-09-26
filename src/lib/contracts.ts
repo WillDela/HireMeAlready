@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { Question } from "@/lib/mock";
+import type { ResumeView } from "@/lib/views";
 
 // Shared shapes between streams. Owner: Stream B. After the freeze, changes are
 // additive only — announce them in team chat before merging.
@@ -129,7 +131,8 @@ export type QuestionSetInput = z.infer<typeof QuestionSetInput>;
 
 export const JoinQueueInput = z.object({
   role: InterviewRole,
-  jobTitle: z.string().optional(),
+  jobTitle: z.string().trim().max(120).optional(),
+  company: z.string().trim().max(120).optional(), // interviewees only
 });
 export type JoinQueueInput = z.infer<typeof JoinQueueInput>;
 
@@ -188,18 +191,51 @@ export type ResumeEditInput = z.infer<typeof ResumeEditInput>;
 
 // ---------- API responses ----------
 
-// GET /api/queue, polled every ~2s while waiting.
+// The person you were matched with, as the live page's matched card shows them.
+export type MatchPartner = {
+  name: string;
+  initials: string;
+  headline: string;
+  role: InterviewRole;
+  interviewsDone: number; // completed interviews, either role
+  matchedOn: string[]; // shared resume skills (up to 3), or the job title
+};
+
+// GET /api/queue, polled every ~2s through search, match and lobby.
 export type QueueState =
   | { state: "idle" }
-  | { state: "waiting"; since: string }
+  // `partnerLeft`: your match cancelled or went quiet, so you're back in line.
+  | { state: "waiting"; since: string; partnerLeft?: { name: string } }
   | {
       state: "matched";
       interviewId: string;
       role: InterviewRole;
       selfPeerId: string;
       remotePeerId: string;
+      partner: MatchPartner;
     }
   | { state: "expired" };
+
+// GET /api/interviews/:id/peer, everything the call page needs for a peer interview.
+// Polled while the interview is PENDING or ACTIVE, which also keeps your queue
+// heartbeat alive and shows when the other person leaves.
+export type PeerSession = {
+  interviewId: string;
+  status: InterviewStatus;
+  role: InterviewRole;
+  isCaller: boolean; // the interviewer dials
+  selfPeerId: string;
+  remotePeerId: string;
+  jobTitle: string | null;
+  company: string | null;
+  partner: { name: string; initials: string; headline: string };
+  // Interviewer only, and only when the candidate shares their resume.
+  candidate: (ResumeView & { name: string; initials: string; target: string }) | null;
+  questions: Question[]; // suggested questions; interviewer only
+};
+
+export const PeerEventInput = z.object({ event: z.enum(["connected", "left"]) });
+export type PeerEventInput = z.infer<typeof PeerEventInput>;
 
 // GET /api/turn-credentials
 export type IceServersResponse = { iceServers: RTCIceServer[]; ttl: number };

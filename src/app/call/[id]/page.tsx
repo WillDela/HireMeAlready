@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { StatePreview } from "@/components/ui/StatePreview";
+import { PeerCall } from "./PeerCall";
 
 function useElapsed(running: boolean) {
   const [s, setS] = useState(0);
@@ -50,6 +51,11 @@ function useAiScript(active: boolean) {
 
 export default function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  // Mock ids keep the prototype below; any other id is a matched peer interview.
+  return callSessions[id] ? <MockCallPage id={id} /> : <PeerCall id={id} />;
+}
+
+function MockCallPage({ id }: { id: string }) {
   const session = callSessions[id];
   const router = useRouter();
   const currentUser = useCurrentUser();
