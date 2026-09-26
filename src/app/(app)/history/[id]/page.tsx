@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
+import { notFound } from "next/navigation";
+import { use, useState } from "react";
 import { ArrowLeft, Check, Lightbulb, Mail, UserPlus } from "lucide-react";
-import type { InterviewDetail as ApiInterviewDetail, FriendsResponse } from "@/lib/contracts";
-import { toDetailView } from "@/lib/interview-view";
-import type { InterviewDetail } from "@/lib/mock";
 import { apiFetch, useApiResource } from "@/lib/use-api";
-import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
+import type { HistoryDetail as InterviewDetail } from "@/lib/views";
 import { TypeTag } from "@/components/InterviewTable";
 import { ScoreCard } from "@/components/ScoreCard";
 import { TranscriptView } from "@/components/TranscriptView";
@@ -65,17 +63,22 @@ function Summary({ iv, onJump }: { iv: InterviewDetail; onJump: () => void }) {
 }
 
 function Analysis({ iv }: { iv: InterviewDetail }) {
+  if (!iv.analysis && iv.analysisStatus === "pending") {
+    return (
+      <EmptyFolder title="Scoring your answers">
+        The analysis usually takes a minute or two after the interview ends. This page updates when it&apos;s ready.
+      </EmptyFolder>
+    );
+  }
+  if (!iv.analysis && iv.analysisStatus === "failed") {
+    return (
+      <EmptyFolder title="We couldn't score this one">
+        Something went wrong reading this interview. Your transcript and any interviewer feedback are still in the other tabs.
+      </EmptyFolder>
+    );
+  }
   if (!iv.analysis) {
-    return iv.analysisPending === "processing" ? (
-      <EmptyFolder title="Still scoring">
-        The analysis of your answers is being written. This page updates on its own when it&apos;s ready.
-      </EmptyFolder>
-    ) : iv.analysisPending === "failed" ? (
-      <EmptyFolder title="Couldn't be scored">
-        We couldn&apos;t get a transcript with your answers, or scoring it failed, so there&apos;s no analysis for
-        this one. Anything we did capture is in the Transcript tab.
-      </EmptyFolder>
-    ) : (
+    return (
       <EmptyFolder title="Not scored">
         You were the interviewer in this one, so there&apos;s no analysis of your answers. Your notes and feedback are in the other tabs.
       </EmptyFolder>
@@ -210,6 +213,19 @@ function Feedback({ iv }: { iv: InterviewDetail }) {
   );
 }
 
+function Transcript({ iv }: { iv: InterviewDetail }) {
+  if (iv.transcript.length) return <TranscriptView turns={iv.transcript} />;
+  return iv.transcriptStatus === "failed" ? (
+    <EmptyFolder title="No transcript for this one">
+      We couldn&apos;t get a transcript from the recording. Any analysis and feedback are still in the other tabs.
+    </EmptyFolder>
+  ) : (
+    <EmptyFolder title="Transcript on its way">
+      It&apos;s written up a minute or two after the interview ends. This page updates when it&apos;s ready.
+    </EmptyFolder>
+  );
+}
+
 function People({ iv }: { iv: InterviewDetail }) {
   const [sent, setSent] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState<Record<string, boolean>>({});
@@ -250,7 +266,7 @@ function People({ iv }: { iv: InterviewDetail }) {
           <div className="pl-[3.875rem] sm:pl-0">
             {p.isFriend ? (
               <span className="tag text-ink">Friends</span>
-            ) : sent[p.id] ? (
+            ) : sent[p.id] || p.requested ? (
               <Stamp tone="ink" land rotate={-5} className="text-[0.75rem]">
                 Request sent
               </Stamp>
@@ -274,79 +290,55 @@ function People({ iv }: { iv: InterviewDetail }) {
 
 export default function InterviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const viewer = useCurrentUser();
   const [tab, setTab] = useState<Tab>("summary");
-  // Keeps refreshing while the transcript or analysis is still being produced.
-  const { status, data, retry } = useApiResource<ApiInterviewDetail>(`/api/interviews/${id}`, {
-    pollWhile: (d) =>
-      d.status === "COMPLETED" &&
-      d.transcriptStatus !== "FAILED" &&
-      d.analysis?.status !== "READY" &&
-      d.analysis?.status !== "FAILED",
-    pollMs: 3000,
+  // Keep checking while the transcript or analysis is still being written.
+  const { status, data: iv, error, retry } = useApiResource<InterviewDetail>(`/api/interviews/${id}`, {
+    pollWhile: (d) => d.transcriptStatus === "pending" || d.analysisStatus === "pending",
+    pollMs: 5000,
   });
-  const { data: friends } = useApiResource<FriendsResponse>("/api/friends");
-  const iv = useMemo(
-    () => (data ? toDetailView(data, viewer.id, new Set(friends?.friends.map((f) => f.id))) : null),
-    [data, friends, viewer.id],
-  );
-
-  if (!iv) {
-    return (
-      <StateView
-        status={status === "ready" ? "loading" : status}
-        loading={<LoadingSheets label="Opening the file…" layout="detail" />}
-        error={
-          <ErrorReturned title="This interview didn't load" onRetry={retry}>
-            It may have been deleted, or it isn&apos;t one of yours. Try again in a moment.
-          </ErrorReturned>
-        }
-        empty={null}
-      >
-        {null}
-      </StateView>
-    );
-  }
+  if (error?.status === 404) notFound();
 
   return (
     <>
-      <title>{`${iv.company} · History`}</title>
+      <title>{`${iv?.company ?? "Interview"} · History`}</title>
       <Link href="/history" className="-mt-2 mb-4 inline-flex min-h-11 items-center gap-2 text-[0.9375rem] font-semibold text-manila-ink hover:text-ink">
         <ArrowLeft size={17} aria-hidden="true" /> All interviews
       </Link>
 
-      <header className="mb-8 flex items-start justify-between gap-4 sm:items-end">
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-[0.875rem] text-manila-ink">
-            <TypeTag type={iv.type} />
-            <time dateTime={iv.date}>{iv.dateLabel}</time>
-            <span aria-hidden="true">·</span>
-            <span className="tnum">{iv.duration}</span>
-          </p>
-          <h1 className="wide mt-3 text-[2rem] leading-[1.02] font-extrabold tracking-[-0.025em] md:text-[2.75rem]">
-            {iv.company}
-          </h1>
-          <p className="mt-1.5 text-[1.0625rem] text-manila-ink">
-            {iv.jobTitle} · {iv.type === "ai" ? "with the AI interviewer" : `with ${iv.partner}`}
-          </p>
-        </div>
-        <div className="flex-none pt-8 sm:pt-0 sm:pr-4">
-          {status === "ready" && iv.score !== null ? (
-            <>
-              <span className="sm:hidden">
-                <ScoreStamp score={iv.score} size={84} land />
-              </span>
-              <span className="hidden sm:inline">
-                <ScoreStamp score={iv.score} size={128} land />
-              </span>
-            </>
-          ) : status === "ready" ? (
-            <Stamp tone="muted" rotate={-6} className="text-[1rem]">
-              Not scored
-            </Stamp>
-          ) : null}
-        </div>
-      </header>
+      {iv ? (
+        <header className="mb-8 flex items-start justify-between gap-4 sm:items-end">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 text-[0.875rem] text-manila-ink">
+              <TypeTag type={iv.type} />
+              <time dateTime={iv.date}>{iv.dateLabel}</time>
+              <span aria-hidden="true">·</span>
+              <span className="tnum">{iv.duration}</span>
+            </p>
+            <h1 className="wide mt-3 text-[2rem] leading-[1.02] font-extrabold tracking-[-0.025em] md:text-[2.75rem]">
+              {iv.company}
+            </h1>
+            <p className="mt-1.5 text-[1.0625rem] text-manila-ink">
+              {iv.jobTitle} · {iv.type === "ai" ? "with the AI interviewer" : `with ${iv.partner}`}
+            </p>
+          </div>
+          <div className="flex-none pt-8 sm:pt-0 sm:pr-4">
+            {status === "ready" && iv.score !== null ? (
+              <>
+                <span className="sm:hidden">
+                  <ScoreStamp score={iv.score} size={84} land />
+                </span>
+                <span className="hidden sm:inline">
+                  <ScoreStamp score={iv.score} size={128} land />
+                </span>
+              </>
+            ) : status === "ready" ? (
+              <Stamp tone="muted" rotate={-6} className="text-[1rem]">
+                Not scored
+              </Stamp>
+            ) : null}
+          </div>
+        </header>
+      ) : null}
 
       <StateView
         status={status}
@@ -364,24 +356,26 @@ export default function InterviewDetailPage({ params }: { params: Promise<{ id: 
           </div>
         }
       >
-        <FolderTabs
-          label="Interview file"
-          value={tab}
-          onChange={(t) => setTab(t as Tab)}
-          tabs={[
-            { id: "summary", label: "Summary" },
-            { id: "transcript", label: "Transcript" },
-            { id: "analysis", label: "AI Analysis" },
-            { id: "feedback", label: "Interviewer Feedback" },
-            { id: "people", label: "People", count: iv.people.length },
-          ]}
-        >
-          {tab === "summary" ? <Summary iv={iv} onJump={() => setTab("transcript")} /> : null}
-          {tab === "transcript" ? <TranscriptView turns={iv.transcript} /> : null}
-          {tab === "analysis" ? <Analysis iv={iv} /> : null}
-          {tab === "feedback" ? <Feedback iv={iv} /> : null}
-          {tab === "people" ? <People iv={iv} /> : null}
-        </FolderTabs>
+        {iv ? (
+          <FolderTabs
+            label="Interview file"
+            value={tab}
+            onChange={(t) => setTab(t as Tab)}
+            tabs={[
+              { id: "summary", label: "Summary" },
+              { id: "transcript", label: "Transcript" },
+              { id: "analysis", label: "AI Analysis" },
+              { id: "feedback", label: "Interviewer Feedback" },
+              { id: "people", label: "People", count: iv.people.length },
+            ]}
+          >
+            {tab === "summary" ? <Summary iv={iv} onJump={() => setTab("transcript")} /> : null}
+            {tab === "transcript" ? <Transcript iv={iv} /> : null}
+            {tab === "analysis" ? <Analysis iv={iv} /> : null}
+            {tab === "feedback" ? <Feedback iv={iv} /> : null}
+            {tab === "people" ? <People iv={iv} /> : null}
+          </FolderTabs>
+        ) : null}
       </StateView>
     </>
   );

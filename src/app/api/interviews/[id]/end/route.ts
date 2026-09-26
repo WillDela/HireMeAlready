@@ -11,10 +11,10 @@ import { requireUser } from "@/lib/session";
 // (POST /api/interviews/:id/recordings, per docs/PLAN.md), not here, since at this point
 // there's nothing to transcribe yet. Safe to call more than once: only the first call
 // finalizes.
-export function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export function POST(_request: Request, ctx: RouteContext<"/api/interviews/[id]/end">) {
   return handleRoute(async () => {
     const user = await requireUser();
-    const { id } = await params;
+    const { id } = await ctx.params;
     const { interview } = await requireParticipant(id, user.id);
 
     // Conditional update so two racing calls (both sides of a peer call, or a retry)

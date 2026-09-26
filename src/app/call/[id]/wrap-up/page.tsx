@@ -5,13 +5,12 @@ import { notFound, useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { InterviewDetail } from "@/lib/contracts";
 import { candidateResume } from "@/lib/mock";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
 import { useApiResource } from "@/lib/use-api";
 import { useCallSession } from "@/lib/use-call-session";
-import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
+import type { HistoryDetail } from "@/lib/views";
 import { FeedbackForm } from "@/components/FeedbackForm";
 import { Wordmark } from "@/components/shell/Wordmark";
 import { ButtonLink } from "@/components/ui/Button";
@@ -23,18 +22,18 @@ import { StatePreview } from "@/components/ui/StatePreview";
 const processingSteps = ["Transcribing the recording", "Scoring your answers", "Writing your feedback"];
 
 /** Where the real finalize pipeline is: 0 transcript, 1 analysis, 3 done. */
-function stepOf(detail: InterviewDetail): number {
-  if (detail.transcriptStatus !== "READY") return 0;
-  if (detail.analysis?.status !== "READY") return 1;
+function stepOf(detail: HistoryDetail): number {
+  if (detail.transcriptStatus !== "ready") return 0;
+  if (detail.analysisStatus !== "ready") return 1;
   return processingSteps.length;
 }
 
-const hasFailed = (d: InterviewDetail) => d.transcriptStatus === "FAILED" || d.analysis?.status === "FAILED";
-const isSettled = (d: InterviewDetail) => hasFailed(d) || d.analysis?.status === "READY";
+const hasFailed = (d: HistoryDetail) => d.transcriptStatus === "failed" || d.analysisStatus === "failed";
+const isSettled = (d: HistoryDetail) => hasFailed(d) || d.analysisStatus === "ready";
 
 /** Polls the interview until its transcript and analysis are filed (or fail). */
 function LiveProcessing({ id, hold }: { id: string; hold: boolean }) {
-  const { data, status, retry } = useApiResource<InterviewDetail>(`/api/interviews/${id}`, {
+  const { data, status, retry } = useApiResource<HistoryDetail>(`/api/interviews/${id}`, {
     pollWhile: (d) => !isSettled(d),
   });
 
@@ -48,8 +47,8 @@ function LiveProcessing({ id, hold }: { id: string; hold: boolean }) {
     );
   }
   if (data && hasFailed(data)) {
-    const answered = data.transcript.some((line) => line.speaker === "INTERVIEWEE");
-    return data.transcriptStatus === "READY" && !answered ? (
+    const answered = data.transcript.some((turn) => turn.isYou);
+    return data.transcriptStatus === "ready" && !answered ? (
       <div className="sheet mx-auto max-w-lg">
         <EmptyFolder title="Nothing to score" action={<ButtonLink href="/practice/ai">Try again</ButtonLink>}>
           We didn&apos;t catch any answers in this interview, so there&apos;s nothing to score. Check your
@@ -185,7 +184,7 @@ function InterviewerFeedback({ historyId }: { historyId: string }) {
 
 export default function WrapUpPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { status, session } = useCallSession(id, useCurrentUser().id);
+  const { status, session } = useCallSession(id);
   const [role] = useRole();
   const forced = useForcedState();
   if (status === "missing") notFound();

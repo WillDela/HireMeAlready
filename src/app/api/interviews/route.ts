@@ -2,13 +2,13 @@ import { handleRoute, HttpError } from "@/lib/api";
 import { CreateInterviewInput, peerIdFor, type CreateInterviewResponse } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { generateQuestions } from "@/lib/gemini";
-import { listInterviews } from "@/lib/interviews";
+import { listInterviews } from "@/lib/history";
 import { getActiveParsedResume } from "@/lib/resume";
 import { requireUser } from "@/lib/session";
 
 const QUESTION_COUNT = 7;
 
-// GET /api/interviews: the caller's interviews (either mode), newest first.
+// GET /api/interviews: your completed interviews, newest first (HistoryItem[]).
 export function GET() {
   return handleRoute(async () => {
     const user = await requireUser();

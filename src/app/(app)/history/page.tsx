@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
-import type { InterviewListItem } from "@/lib/contracts";
-import { toSummaryView } from "@/lib/interview-view";
 import type { InterviewType } from "@/lib/mock";
 import { useApiResource } from "@/lib/use-api";
+import type { HistoryItem } from "@/lib/views";
 import { InterviewTable } from "@/components/InterviewTable";
 import { ButtonLink } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -21,10 +20,10 @@ const filters: { value: Filter; label: string }[] = [
 
 export default function HistoryPage() {
   const [filter, setFilter] = useState<Filter>("all");
-  const { status, data: items, retry } = useApiResource<InterviewListItem[]>("/api/interviews", {
+  const { status, data: items, retry } = useApiResource<HistoryItem[]>("/api/interviews", {
     isEmpty: (d) => d.length === 0,
   });
-  const data = useMemo(() => (items ?? []).map(toSummaryView), [items]);
+  const data = items ?? [];
   const shown = filter === "all" ? data : data.filter((i) => i.type === filter);
   const scored = data.filter((i) => i.score !== null);
   const avg = scored.reduce((s, i) => s + (i.score ?? 0), 0) / Math.max(1, scored.length);
@@ -36,9 +35,7 @@ export default function HistoryPage() {
         title="History"
         description={
           status === "ready"
-            ? `${data.length} ${data.length === 1 ? "interview" : "interviews"} filed.${
-                scored.length ? ` Average score ${avg.toFixed(1)} across ${scored.length} scored.` : ""
-              }`
+            ? `${data.length} ${data.length === 1 ? "interview" : "interviews"} filed.${scored.length ? ` Average score ${avg.toFixed(1)} across ${scored.length} scored.` : ""}`
             : "Every practice interview, with its transcript, analysis and feedback."
         }
         actions={

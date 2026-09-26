@@ -6,7 +6,6 @@ import { use, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useCallSession } from "@/lib/use-call-session";
-import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { DeviceCheck, type Permission } from "@/components/call/DeviceCheck";
 import { TypeTag } from "@/components/InterviewTable";
 import { Spinner } from "@/components/ui/Spinner";
@@ -14,7 +13,7 @@ import { StatePreview } from "@/components/ui/StatePreview";
 
 export default function LobbyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { status, session } = useCallSession(id, useCurrentUser().id);
+  const { status, session } = useCallSession(id);
   const router = useRouter();
   const forced = useForcedState();
   const [joining, setJoining] = useState(false);

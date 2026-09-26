@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
-import type { FriendsResponse, InterviewDetail, InterviewListItem } from "@/lib/contracts";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
-import { toSummaryView } from "@/lib/interview-view";
-import { apiFetch, useApiResource } from "@/lib/use-api";
+import { friendRequests } from "@/lib/mock";
+import { useApiResource } from "@/lib/use-api";
+import type { HistoryItem } from "@/lib/views";
 import { FriendRow } from "@/components/FriendRow";
 import { TypeTag } from "@/components/InterviewTable";
 import { PracticeFolder } from "@/components/PracticeFolder";
@@ -15,14 +15,7 @@ import { PaperClip } from "@/components/ui/PaperClip";
 import { ScoreStamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned, LoadingSheets } from "@/components/ui/States";
 
-function LastScore({ item }: { item: InterviewListItem }) {
-  const lastInterview = toSummaryView(item);
-  // The detail carries the analysis, for the "work on next" line.
-  const { data: detail } = useApiResource<InterviewDetail>(`/api/interviews/${item.id}`);
-  const workOnNext =
-    item.myRole === "INTERVIEWEE" && detail?.analysis?.status === "READY"
-      ? detail.analysis.result?.improvements[0]
-      : undefined;
+function LastScore({ lastInterview }: { lastInterview: HistoryItem }) {
   return (
     <section aria-labelledby="last-heading" className="sheet relative px-5 pt-11 pb-5 sm:px-6">
       <PaperClip className="left-7 rotate-[-8deg]" />
@@ -40,10 +33,10 @@ function LastScore({ item }: { item: InterviewListItem }) {
         </div>
         {lastInterview.score !== null ? <ScoreStamp score={lastInterview.score} size={104} land /> : null}
       </div>
-      {workOnNext ? (
+      {lastInterview.workOnNext ? (
         <p className="mt-5 border-t border-edge pt-4 text-[0.9375rem] leading-relaxed">
           <span className="font-bold">Work on next: </span>
-          <mark className="hl box-decoration-clone px-0.5">{workOnNext}</mark>
+          <mark className="hl box-decoration-clone px-0.5">{lastInterview.workOnNext}</mark>
         </p>
       ) : null}
       <Link
@@ -56,25 +49,10 @@ function LastScore({ item }: { item: InterviewListItem }) {
   );
 }
 
-function Requests() {
-  const { status, data, mutate } = useApiResource<FriendsResponse>("/api/friends");
+function Requests({ empty }: { empty: boolean }) {
+  const [pending, setPending] = useState(friendRequests.filter((r) => r.direction === "incoming"));
   const [handled, setHandled] = useState<Record<string, "accepted" | "declined">>({});
-  const list = data?.incoming ?? [];
-
-  if (status === "loading" || status === "error") return null;
-
-  async function respond(requestId: string, decision: "ACCEPTED" | "DECLINED") {
-    setHandled((h) => ({ ...h, [requestId]: decision === "ACCEPTED" ? "accepted" : "declined" }));
-    try {
-      const next = await apiFetch<FriendsResponse>(`/api/friends/${requestId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: decision }),
-      });
-      window.setTimeout(() => mutate(next), decision === "DECLINED" ? 0 : 1600);
-    } catch {
-      setHandled((h) => Object.fromEntries(Object.entries(h).filter(([id]) => id !== requestId)));
-    }
-  }
+  const list = empty ? [] : pending;
 
   return (
     <section aria-labelledby="req-heading" className="sheet relative">
@@ -96,23 +74,30 @@ function Requests() {
         <ul className="divide-y divide-edge">
           {list.map((r) => (
             <FriendRow
-              key={r.requestId}
+              key={r.id}
               person={r}
-              meta={`Sent ${new Date(r.sentAt).toLocaleDateString()}`}
+              meta={r.mutual ? `${r.mutual} mutual ${r.mutual === 1 ? "friend" : "friends"}` : `Sent ${r.sent}`}
               actions={
-                handled[r.requestId] ? (
+                handled[r.id] ? (
                   <p className="text-[0.875rem] font-semibold text-ink-2" role="status">
-                    {handled[r.requestId] === "accepted" ? "Added to friends" : "Declined"}
+                    {handled[r.id] === "accepted" ? "Added to friends" : "Declined"}
                   </p>
                 ) : (
                   <>
-                    <Button size="sm" onClick={() => respond(r.requestId, "ACCEPTED")} aria-label={`Accept ${r.name}`}>
+                    <Button
+                      size="sm"
+                      onClick={() => setHandled((h) => ({ ...h, [r.id]: "accepted" }))}
+                      aria-label={`Accept ${r.name}`}
+                    >
                       Accept
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => respond(r.requestId, "DECLINED")}
+                      onClick={() => {
+                        setHandled((h) => ({ ...h, [r.id]: "declined" }));
+                        window.setTimeout(() => setPending((p) => p.filter((x) => x.id !== r.id)), 1600);
+                      }}
                       aria-label={`Decline ${r.name}`}
                     >
                       Decline
@@ -130,9 +115,10 @@ function Requests() {
 
 export default function DashboardPage() {
   const currentUser = useCurrentUser();
-  const { status, data: interviews, retry } = useApiResource<InterviewListItem[]>("/api/interviews", {
+  const { status, data, retry } = useApiResource<HistoryItem[]>("/api/interviews", {
     isEmpty: (d) => d.length === 0,
   });
+  const lastInterview = data?.[0];
 
   return (
     <>
@@ -188,14 +174,16 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="sheet-in">
-              {interviews?.[0] ? <LastScore item={interviews[0]} /> : null}
+              {lastInterview ? <LastScore lastInterview={lastInterview} /> : null}
             </div>
           )}
         </div>
 
-        <div className="lg:col-span-3">
-          <Requests />
-        </div>
+        {status === "loading" || status === "error" ? null : (
+          <div className="lg:col-span-3">
+            <Requests empty={status === "empty"} />
+          </div>
+        )}
       </div>
     </>
   );

@@ -61,7 +61,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
 }
 
 function RealCall({ id }: { id: string }) {
-  const { status, session } = useCallSession(id, useCurrentUser().id);
+  const { status, session } = useCallSession(id);
   if (status === "missing") notFound();
   if (!session) {
     return (

@@ -262,56 +262,6 @@ export type AiSessionResponse = {
   dynamicVariables: Record<string, string>;
 };
 
-export type ParticipantSummary = {
-  userId: string;
-  name: string;
-  role: InterviewRole;
-  // Only present when that user's Profile.shareContact is true.
-  contact?: { email: string; linkedinUrl?: string };
-};
-
-// Peer mode only (mode: "PEER"); null for AI interviews. Added for Stream A's
-// usePeerCall wiring in /call/[id].
-export type InterviewPeerFields = {
-  myPeerId: string | null;
-  partnerPeerId: string | null;
-  // The other participant's resume, only when their Profile.shareResume is true.
-  partnerResume: { summary: string; skills: string[] } | null;
-};
-
-// GET /api/interviews (history list)
-export type InterviewListItem = {
-  id: string;
-  mode: InterviewMode;
-  status: InterviewStatus;
-  jobTitle: string | null;
-  company: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  endedAt: string | null;
-  myRole: InterviewRole;
-  partnerName: string | null; // null for AI interviews
-  overallScore: number | null;
-};
-
-// GET /api/interviews/:id
-export type InterviewDetail = InterviewPeerFields & {
-  id: string;
-  mode: InterviewMode;
-  status: InterviewStatus;
-  jobTitle: string | null;
-  company: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  endedAt: string | null;
-  participants: ParticipantSummary[];
-  questions: GeneratedQuestion[];
-  transcript: TranscriptLine[];
-  transcriptStatus: JobStatus;
-  analysis: { status: JobStatus; result: AnalysisResult | null } | null;
-  feedback: (FeedbackInput & { authorName: string; createdAt: string })[];
-};
-
 // ---------- Friends ----------
 
 export const SendFriendRequestInput = z.object({ userId: z.string().min(1) });
