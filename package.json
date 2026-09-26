@@ -13,7 +13,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:vector-index": "prisma db execute --file prisma/sql/vector-index.sql",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "agent:sync": "tsx scripts/sync-agent.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",

@@ -36,7 +36,7 @@ Only the owning stream edits these paths; ask in team chat for changes elsewhere
 |---|---|
 | **A — Infra & Realtime** | `docker-compose.yml`, `Caddyfile`, `coturn/`, `Dockerfile`, `src/lib/rtc/`, `src/app/api/turn-credentials/`, `src/app/(app)/interview/[id]/peer/`, `src/components/call/` |
 | **B — Data, Auth, Matching** (William) | `prisma/`, `src/lib/{db,auth,auth-client,session,api,storage,vector,contracts,matching}.ts`, `src/app/api/{auth,profile,resume,queue,interviews,friends,messages,invitations}/` |
-| **C — AI** | `src/lib/gemini/`, `src/lib/elevenlabs.ts`, `src/lib/pipeline/`, `src/app/api/ai/`, `src/app/(app)/interview/[id]/ai/` |
+| **C — AI** | `src/lib/gemini/`, `src/lib/elevenlabs/`, `scripts/sync-agent.mts`, `src/lib/pipeline/`, `src/app/api/ai/`, `src/app/(app)/interview/[id]/ai/` |
 | **D — Product UX** | `src/components/ui/`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/(auth)/`, `src/app/(app)/{dashboard,profile,lobby,history,friends}/`, `src/components/{history,lobby,profile}/` |
 
 Shared interfaces live in `src/lib/contracts.ts` (zod schemas + types). `src/lib/gemini/index.ts` currently returns fixtures with the final signatures, so UI and API work doesn't wait on Gemini.
@@ -65,6 +65,15 @@ The `ufw` firewall allows only: 22 (SSH), 80/443 (Caddy), 3478 tcp+udp and 5349 
 - **Local dev uses the production PeerJS and coturn servers**, so your local `TURN_SECRET` must match the droplet's.
 
 **Network check:** open `https://hiremealready.study/rtc-test` on two devices, join the same room as A and B, and keep "Force TURN relay" on. "Path: TURN relay" plus video both ways means calls will work on that network. Run it on the venue Wi-Fi before demoing.
+
+## AI interviewer (ElevenLabs)
+
+The interviewer is an ElevenLabs Agent whose config (prompt, first message, Gemini LLM, end-call tool, limits) lives in `src/lib/elevenlabs/interviewer-agent.ts`. After editing it, run `npm run agent:sync` to push the change. It creates the agent the first time and updates it after that.
+
+- Sessions require a signed URL from our server (`getSignedUrl()` in `src/lib/elevenlabs/index.ts`), so the agent can't be used from outside the app.
+- Each session fills `{{candidate_name}}`, `{{job_title}}`, `{{company}}`, `{{resume_summary}}`, and `{{questions}}` (see `InterviewVariables`).
+- `getConversation(id)` returns the transcript. It reaches `status: "done"` a few seconds after the call ends.
+- The ElevenLabs account is on the free plan, so conversation minutes are scarce. Test with the `text_only` override where possible.
 
 ## Deploying
 
