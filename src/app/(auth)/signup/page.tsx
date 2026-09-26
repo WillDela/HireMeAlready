@@ -3,6 +3,7 @@ import { AuthForm } from "@/components/AuthForm";
 
 export const metadata: Metadata = { title: "Create account" };
 
-export default function SignupPage() {
-  return <AuthForm mode="signup" />;
+export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
+  return <AuthForm mode="signup" oauthError={error} />;
 }
