@@ -1,0 +1,16 @@
+# Caddy gets and renews the Let's Encrypt certificate automatically.
+
+hiremealready.study {
+	encode zstd gzip
+
+	# Stream A: PeerJS signaling (websocket) goes here, before the catch-all:
+	# handle /peerjs* {
+	# 	reverse_proxy peer:9000
+	# }
+
+	reverse_proxy web:3000
+}
+
+www.hiremealready.study {
+	redir https://hiremealready.study{uri} permanent
+}

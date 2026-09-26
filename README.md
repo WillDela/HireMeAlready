@@ -55,3 +55,16 @@ Domain `hiremealready.study` (Porkbun DNS; `.study` is a GoDaddy Registry TLD) w
 The `ufw` firewall allows only: 22 (SSH), 80/443 (Caddy), 3478 tcp+udp and 5349 tcp (TURN), 49160–49200 udp (TURN relay; match `min-port`/`max-port` in coturn).
 
 **Docker-published ports bypass ufw.** In `docker-compose.yml`, only Caddy should use `ports:` (80/443). Every other service uses `expose:` and is reached through Caddy on the Compose network, and coturn uses `network_mode: host`. Writing `ports: ["3000:3000"]` would expose that service to the internet even though ufw doesn't allow it.
+
+## Deploying
+
+```bash
+scripts/deploy.sh
+```
+
+This rsyncs your working tree to `/opt/hiremealready` on the droplet, then runs `docker compose up -d --build` there (about 2–3 minutes). Caddy serves `https://hiremealready.study` with an automatic Let's Encrypt certificate and redirects `www` and plain HTTP to it.
+
+- The droplet has its **own** `.env` at `/opt/hiremealready/.env`, which deploys never overwrite. It holds the production `BETTER_AUTH_URL`, its own `BETTER_AUTH_SECRET`, and the `NEXT_PUBLIC_PEER_*` values. To change a value, edit that file on the droplet and redeploy.
+- `NEXT_PUBLIC_*` variables are baked in at build time, so changing one requires a redeploy (rebuild), not just a restart.
+- Logs: `ssh root@104.131.187.142 'cd /opt/hiremealready && docker compose logs -f web'`
+- Deploy from a branch that's been merged (or is about to be); there's one shared production.

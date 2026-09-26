@@ -1,0 +1,13 @@
+# Keep secrets and local build output out of the image.
+.env
+.env.*
+!.env.example
+node_modules
+.next
+src/generated
+.git
+.claude
+.agents
+.windsurf
+docs
+*.md
