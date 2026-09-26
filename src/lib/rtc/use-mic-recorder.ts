@@ -27,7 +27,10 @@ export function useMicRecorder(stream: MediaStream | null, active: boolean) {
     if (!active || !stream || sessionRef.current || typeof MediaRecorder === "undefined") return;
     const tracks = stream.getAudioTracks();
     const format = FORMATS.find((f) => MediaRecorder.isTypeSupported(f));
-    if (!tracks.length || !format) return;
+    if (!tracks.length || !format) {
+      console.warn(`Not recording your side of the transcript: ${tracks.length ? "no supported audio format" : "no mic track"}`);
+      return;
+    }
 
     const recorder = new MediaRecorder(new MediaStream(tracks), {
       mimeType: format,

@@ -49,7 +49,7 @@ export const INTERVIEWER_AGENT_CONFIG = {
       dynamic_variables: { dynamic_variable_placeholders: PLACEHOLDERS },
       prompt: {
         prompt: SYSTEM_PROMPT,
-        llm: "gemini-3.8-flash",
+        llm: "gemini-3.1-flash-lite", // the only Gemini model this project uses
         temperature: 0.5,
         built_in_tools: { end_call: { name: "end_call", params: { system_tool_type: "end_call" } } },
       },
