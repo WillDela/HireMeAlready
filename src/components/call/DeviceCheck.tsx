@@ -1,34 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Check, Mic, MicOff, TriangleAlert, Video, VideoOff, Volume2, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { devices } from "@/lib/mock";
+import {
+  canPickSpeaker,
+  playTestSound,
+  useLocalMedia,
+  useMicLevel,
+  type DeviceOption,
+  type DeviceStatus,
+  type Permission,
+} from "@/lib/rtc/use-local-media";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { Button } from "@/components/ui/Button";
 import { SelectField } from "@/components/ui/Field";
 import { Spinner } from "@/components/ui/Spinner";
 import { VideoTile } from "./VideoTile";
 
-export type Permission = "checking" | "granted" | "denied" | "none";
+export type { Permission };
 
-/** Simulated input level, 0-100, while the mic is on. */
-function useMicLevel(active: boolean) {
-  const [level, setLevel] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    let t = 0;
-    const id = window.setInterval(() => {
-      t += 0.12;
-      const speech = Math.abs(Math.sin(t * 2.7) * Math.sin(t * 0.9 + 1));
-      setLevel(Math.round(8 + speech * 72 + Math.random() * 10));
-    }, 90);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return active ? level : 0;
-}
+/** Rows shown when a state is forced for review (see StatePreview). */
+const FORCED_ROWS: Record<Permission, DeviceStatus> = {
+  checking: "checking",
+  granted: "ok",
+  denied: "blocked",
+  none: "missing",
+  busy: "busy",
+  unsupported: "blocked",
+};
 
-function MicMeter({ level, label }: { level: number; label: string }) {
+/** The saved device if it's still plugged in, else the first one listed. */
+const pick = (options: DeviceOption[], id: string) =>
+  options.some((o) => o.value === id) ? id : (options[0]?.value ?? "");
+
+function MicMeter({
+  stream,
+  active,
+  muted,
+  label,
+}: {
+  stream: MediaStream | null;
+  active: boolean;
+  muted: boolean;
+  label: string;
+}) {
+  const level = useMicLevel(stream, active);
   const segments = 18;
   const lit = Math.round((level / 100) * segments);
   return (
@@ -37,7 +54,9 @@ function MicMeter({ level, label }: { level: number; label: string }) {
         <span id="mic-meter-label" className="text-[0.875rem] font-semibold">
           {label}
         </span>
-        <span className="text-[0.8125rem] text-ink-2">{level > 12 ? "We can hear you" : "Say something to test"}</span>
+        <span className="text-[0.8125rem] text-ink-2">
+          {muted ? "You're muted" : level > 20 ? "We can hear you" : "Say something to test"}
+        </span>
       </div>
       <div
         role="meter"
@@ -61,59 +80,102 @@ function MicMeter({ level, label }: { level: number; label: string }) {
   );
 }
 
-function PermissionRow({ label, state }: { label: string; state: "ok" | "blocked" | "checking" | "missing" }) {
+const ROW_TEXT: Record<DeviceStatus, string> = {
+  ok: "Allowed",
+  found: "Found",
+  blocked: "Blocked",
+  missing: "Not found",
+  busy: "In use",
+  checking: "Checking…",
+};
+
+function PermissionRow({ label, state }: { label: string; state: DeviceStatus }) {
+  const bad = state === "blocked" || state === "missing" || state === "busy";
   return (
     <li className="flex items-center justify-between gap-3 py-2.5">
       <span className="font-semibold">{label}</span>
       <span
         className={cn(
           "flex items-center gap-1.5 text-[0.875rem] font-semibold",
-          state === "ok" && "text-ink",
-          (state === "blocked" || state === "missing") && "text-stamp",
+          (state === "ok" || state === "found") && "text-ink",
+          bad && "text-stamp",
           state === "checking" && "text-ink-2",
         )}
       >
-        {state === "ok" ? <Check size={16} aria-hidden="true" /> : null}
-        {state === "blocked" || state === "missing" ? <X size={16} aria-hidden="true" /> : null}
+        {state === "ok" || state === "found" ? <Check size={16} aria-hidden="true" /> : null}
+        {bad ? <X size={16} aria-hidden="true" /> : null}
         {state === "checking" ? <Spinner size={14} /> : null}
-        {state === "ok" ? "Allowed" : state === "blocked" ? "Blocked" : state === "missing" ? "Not found" : "Checking…"}
+        {ROW_TEXT[state]}
       </span>
     </li>
   );
 }
 
-/** Lobby device check: preview, mic level, device pickers, permissions, join. */
+function Problem({ title, children, onRetry }: { title: string; children: ReactNode; onRetry: () => void }) {
+  return (
+    <div role="alert" className="sheet flex gap-3 p-5">
+      <TriangleAlert size={20} aria-hidden="true" className="mt-0.5 flex-none text-stamp" />
+      <div>
+        <p className="font-bold">{title}</p>
+        <p className="mt-1 text-[0.9375rem] text-ink-2">{children}</p>
+        <Button variant="secondary" size="sm" className="mt-3" onClick={onRetry}>
+          Check again
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Lobby device check: live camera preview, mic level, device pickers, speaker test,
+ * permissions, join. Holds the real camera and mic until it unmounts.
+ */
 export function DeviceCheck({
-  permission,
+  forcedPermission = null,
   onJoin,
   onRetry,
   joinLabel = "Join call",
   joining = false,
 }: {
-  permission: Permission;
+  /** Show this state instead of the real one, for reviewing each state. */
+  forcedPermission?: Permission | null;
   onJoin: () => void;
-  onRetry: () => void;
+  /** Called alongside the real re-check, e.g. to clear a forced state. */
+  onRetry?: () => void;
   joinLabel?: string;
   joining?: boolean;
 }) {
   const currentUser = useCurrentUser();
-  const [cameraOn, setCameraOn] = useState(true);
-  const [micOn, setMicOn] = useState(true);
+  const media = useLocalMedia();
   const [testing, setTesting] = useState(false);
-  const [camera, setCamera] = useState(devices.cameras[0]);
-  const [mic, setMic] = useState(devices.microphones[0]);
-  const [speaker, setSpeaker] = useState(devices.speakers[0]);
+  const [soundFailed, setSoundFailed] = useState(false);
+  const permission = forcedPermission ?? media.permission;
   const granted = permission === "granted";
-  const level = useMicLevel(granted && micOn);
+  const cameraRow = forcedPermission ? FORCED_ROWS[forcedPermission] : media.camera;
+  const micRow = forcedPermission ? FORCED_ROWS[forcedPermission] : media.mic;
+  const { cameraOn, micOn } = media.prefs;
 
-  useEffect(() => {
-    if (!testing) return;
-    const t = window.setTimeout(() => setTesting(false), 1600);
-    return () => window.clearTimeout(t);
-  }, [testing]);
+  const { cameras, microphones } = media.devices;
+  // Firefox and Safari don't list outputs or can't switch them; sound goes to the system default.
+  const speakerChoice = media.devices.speakers.length > 0 && canPickSpeaker();
+  const speakers = speakerChoice ? media.devices.speakers : [{ value: "", label: "System default" }];
 
-  const rowState = (): "ok" | "blocked" | "checking" | "missing" =>
-    permission === "granted" ? "ok" : permission === "denied" ? "blocked" : permission === "none" ? "missing" : "checking";
+  function retry() {
+    onRetry?.();
+    media.retry();
+  }
+
+  async function testSpeakers() {
+    setTesting(true);
+    setSoundFailed(false);
+    try {
+      await playTestSound(speakerChoice ? pick(speakers, media.prefs.speakerId) : "");
+    } catch {
+      setSoundFailed(true);
+    } finally {
+      setTesting(false);
+    }
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:gap-8">
@@ -123,6 +185,7 @@ export function DeviceCheck({
             name={currentUser.name}
             initials={currentUser.initials}
             self
+            stream={granted ? media.stream : null}
             cameraOff={!granted || !cameraOn}
             muted={!micOn}
             className="aspect-video w-full"
@@ -138,7 +201,7 @@ export function DeviceCheck({
           <div className="absolute right-3 bottom-3 flex gap-2">
             <button
               type="button"
-              onClick={() => setMicOn((v) => !v)}
+              onClick={() => media.setMicOn(!micOn)}
               disabled={!granted}
               aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
               className={cn(
@@ -150,7 +213,7 @@ export function DeviceCheck({
             </button>
             <button
               type="button"
-              onClick={() => setCameraOn((v) => !v)}
+              onClick={() => media.setCameraOn(!cameraOn)}
               disabled={!granted}
               aria-label={cameraOn ? "Turn camera off" : "Turn camera on"}
               className={cn(
@@ -163,7 +226,7 @@ export function DeviceCheck({
           </div>
         </div>
         <div className="sheet mt-4 p-4">
-          <MicMeter level={level} label="Microphone level" />
+          <MicMeter stream={media.stream} active={granted && micOn} muted={granted && !micOn} label="Microphone level" />
         </div>
       </div>
 
@@ -173,60 +236,84 @@ export function DeviceCheck({
             Permissions
           </h2>
           <ul className="divide-y divide-edge" aria-live="polite">
-            <PermissionRow label="Camera" state={rowState()} />
-            <PermissionRow label="Microphone" state={rowState()} />
+            <PermissionRow label="Camera" state={cameraRow} />
+            <PermissionRow label="Microphone" state={micRow} />
           </ul>
         </section>
 
         {permission === "denied" ? (
-          <div role="alert" className="sheet flex gap-3 p-5">
-            <TriangleAlert size={20} aria-hidden="true" className="mt-0.5 flex-none text-stamp" />
-            <div>
-              <p className="font-bold">Your browser blocked the camera and microphone</p>
-              <p className="mt-1 text-[0.9375rem] text-ink-2">
-                Select the camera icon in the address bar, choose Allow for both, then check again.
-              </p>
-              <Button variant="secondary" size="sm" className="mt-3" onClick={onRetry}>
-                Check again
-              </Button>
-            </div>
-          </div>
+          <Problem title="Your browser blocked the camera and microphone" onRetry={retry}>
+            Select the camera icon in the address bar, choose Allow for both, then check again.
+          </Problem>
         ) : null}
         {permission === "none" ? (
-          <div role="alert" className="sheet flex gap-3 p-5">
-            <TriangleAlert size={20} aria-hidden="true" className="mt-0.5 flex-none text-stamp" />
-            <div>
-              <p className="font-bold">No camera or microphone found</p>
-              <p className="mt-1 text-[0.9375rem] text-ink-2">Plug one in or close apps that are using it, then check again.</p>
-              <Button variant="secondary" size="sm" className="mt-3" onClick={onRetry}>
-                Check again
-              </Button>
-            </div>
-          </div>
+          <Problem
+            title={
+              cameraRow === "missing" && micRow !== "missing"
+                ? "No camera found"
+                : micRow === "missing" && cameraRow !== "missing"
+                  ? "No microphone found"
+                  : "No camera or microphone found"
+            }
+            onRetry={retry}
+          >
+            Plug one in, then check again.
+          </Problem>
+        ) : null}
+        {permission === "busy" ? (
+          <Problem title="Another app is using your camera or microphone" onRetry={retry}>
+            Close other video call apps or browser tabs that use it, then check again.
+          </Problem>
+        ) : null}
+        {permission === "unsupported" ? (
+          <Problem title="This page can't reach your camera" onRetry={retry}>
+            Browsers only allow the camera on secure pages. Open the site over https (or localhost) in an up-to-date browser.
+          </Problem>
         ) : null}
 
         <section aria-label="Devices" className="sheet space-y-4 p-5">
-          <SelectField label="Camera" options={devices.cameras} value={camera} onChange={(e) => setCamera(e.target.value)} disabled={!granted} />
-          <SelectField label="Microphone" options={devices.microphones} value={mic} onChange={(e) => setMic(e.target.value)} disabled={!granted} />
+          <SelectField
+            label="Camera"
+            options={cameras}
+            value={pick(cameras, media.prefs.cameraId)}
+            onChange={(e) => media.selectCamera(e.target.value)}
+            disabled={!granted || cameras.length === 0}
+          />
+          <SelectField
+            label="Microphone"
+            options={microphones}
+            value={pick(microphones, media.prefs.micId)}
+            onChange={(e) => media.selectMic(e.target.value)}
+            disabled={!granted || microphones.length === 0}
+          />
           <div className="flex items-end gap-2">
             <SelectField
               className="flex-1"
               label="Speakers"
-              options={devices.speakers}
-              value={speaker}
-              onChange={(e) => setSpeaker(e.target.value)}
-              disabled={!granted}
+              options={speakers}
+              value={pick(speakers, media.prefs.speakerId)}
+              onChange={(e) => media.selectSpeaker(e.target.value)}
+              disabled={!granted || !speakerChoice}
             />
             <Button
               variant="secondary"
               className="!min-h-11"
-              onClick={() => setTesting(true)}
+              onClick={testSpeakers}
               disabled={!granted || testing}
               icon={<Volume2 size={17} aria-hidden="true" />}
             >
               {testing ? "Playing…" : "Test"}
             </Button>
           </div>
+          {soundFailed ? (
+            <p role="alert" className="text-[0.875rem] font-semibold text-stamp">
+              Couldn&apos;t play the test sound. Check that this speaker is connected, then try again.
+            </p>
+          ) : (
+            <p className="text-[0.8125rem] text-ink-2">
+              {testing ? "You should hear a short chime. No sound? Turn up your volume or pick another speaker." : "Plays a short chime so you can check your volume."}
+            </p>
+          )}
         </section>
 
         <div>

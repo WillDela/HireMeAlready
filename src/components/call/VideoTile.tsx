@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useRef, type ReactNode } from "react";
 import { MicOff, VideoOff } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /**
- * A participant's video. This prototype has no media stream, so a live
- * camera renders as the person's monogram on the feed ground.
+ * A participant's video. Plays `stream` when given (mirrored for yourself);
+ * without one, a live camera renders as the person's monogram on the feed ground.
  */
 export function VideoTile({
   name,
@@ -14,6 +16,7 @@ export function VideoTile({
   cameraOff = false,
   speaking = false,
   compact = false,
+  stream = null,
   className,
   children,
 }: {
@@ -24,10 +27,17 @@ export function VideoTile({
   cameraOff?: boolean;
   speaking?: boolean;
   compact?: boolean;
+  stream?: MediaStream | null;
   className?: string;
   children?: ReactNode;
 }) {
   const label = self ? "You" : name;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const showVideo = !cameraOff && stream !== null && stream.getVideoTracks().length > 0;
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.srcObject = showVideo ? stream : null;
+  }, [stream, showVideo]);
   return (
     <figure
       className={cn(
@@ -44,6 +54,16 @@ export function VideoTile({
             {!compact ? <span className="text-[0.875rem] font-semibold">Camera off</span> : null}
           </div>
         </div>
+      ) : showVideo ? (
+        // Mute your own tile, or you'll hear yourself.
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={self}
+          aria-hidden="true"
+          className={cn("absolute inset-0 size-full object-cover", self && "-scale-x-100")}
+        />
       ) : (
         <div
           aria-hidden="true"

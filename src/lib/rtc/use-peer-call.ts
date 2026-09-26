@@ -2,6 +2,7 @@
 
 import type { MediaConnection, Peer } from "peerjs";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { openPreferredMedia } from "@/lib/rtc/device-prefs";
 import { peerServerOptions } from "@/lib/rtc/peer-config";
 
 export type CallState = "idle" | "starting" | "waiting" | "connecting" | "connected" | "ended" | "failed";
@@ -23,7 +24,7 @@ type Options = {
 const REDIAL_MS = 2000;
 
 /**
- * One 1:1 video call over PeerJS. Grabs camera + mic, registers `selfPeerId` with the
+ * One 1:1 video call over PeerJS. Grabs the camera + mic picked in the lobby, registers `selfPeerId` with the
  * signaling server, and either dials `remotePeerId` (retrying until it comes online)
  * or waits for its call.
  */
@@ -92,7 +93,7 @@ export function usePeerCall({ selfPeerId, remotePeerId, isCaller, iceServers, fo
       setState("starting");
       setError(null);
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        stream = await openPreferredMedia();
       } catch {
         fail("Camera or microphone permission was denied");
         return;
