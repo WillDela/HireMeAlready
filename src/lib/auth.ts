@@ -9,6 +9,16 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
   },
+  // Redirect URI to register in Google Cloud: <BETTER_AUTH_URL>/api/auth/callback/google.
+  // Google verifies emails, so a Google sign-in links to an existing email/password
+  // account with the same address instead of creating a second user.
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      prompt: "select_account",
+    },
+  },
   // Keep last so Server Actions that call auth.api.* can set cookies.
   plugins: [nextCookies()],
 });
