@@ -5,19 +5,20 @@ import { notFound, useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { candidateResume } from "@/lib/mock";
+import { candidateResume, type CallSession } from "@/lib/mock";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
 import { useApiResource } from "@/lib/use-api";
 import { useCallSession } from "@/lib/use-call-session";
 import type { HistoryDetail } from "@/lib/views";
-import { FeedbackForm } from "@/components/FeedbackForm";
+import { InterviewerFeedback } from "@/components/call/InterviewerFeedback";
 import { Wordmark } from "@/components/shell/Wordmark";
 import { ButtonLink } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Stamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned } from "@/components/ui/States";
 import { StatePreview } from "@/components/ui/StatePreview";
+import { PeerWrapUp } from "./PeerWrapUp";
 
 const processingSteps = ["Transcribing the recording", "Scoring your answers", "Writing your feedback"];
 
@@ -131,62 +132,31 @@ function Processing({ historyId, step, hold }: { historyId: string; step: number
   );
 }
 
-function InterviewerFeedback({ historyId }: { historyId: string }) {
+/** The prototype's interviewer form: pretends to send, and follows the State preview. */
+function MockInterviewerFeedback({ historyId }: { historyId: string }) {
   const forced = useForcedState();
   const [phase, setPhase] = useState<"form" | "sending" | "sent">("form");
-  const name = candidateResume.name;
-
-  if (phase === "sent") {
-    return (
-      <section aria-labelledby="sent-heading" className="sheet mx-auto max-w-lg px-6 py-10 text-center sm:px-10">
-        <Stamp tone="ink" land rotate={-8} className="text-[1.5rem]">
-          Submitted
-        </Stamp>
-        <h1 id="sent-heading" className="mt-6 text-[1.625rem] font-extrabold">
-          Thanks for interviewing {name.split(" ")[0]}
-        </h1>
-        <p className="mt-2 text-ink-2" role="status">
-          Your ratings and comments are in {name.split(" ")[0]}&apos;s file now.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <ButtonLink href="/dashboard">Back to Home</ButtonLink>
-          <ButtonLink href={`/history/${historyId}`} variant="secondary">
-            See this interview
-          </ButtonLink>
-        </div>
-      </section>
-    );
-  }
 
   return (
-    <section aria-labelledby="fb-heading" className="mx-auto max-w-2xl">
-      <h1 id="fb-heading" className="wide text-[2rem] leading-[1.05] font-extrabold tracking-[-0.025em] md:text-[2.5rem]">
-        How did {name.split(" ")[0]} do?
-      </h1>
-      <p className="mt-2.5 max-w-[56ch] text-manila-ink">
-        Rate honestly. {name.split(" ")[0]} is practicing for {candidateResume.target.split(" · ")[1]}, and kind, specific feedback is the most useful thing you can give.
-      </p>
-      <div className="sheet mt-8 p-6 sm:p-8">
-        <FeedbackForm
-          candidateName={name}
-          submitting={phase === "sending" || forced === "loading"}
-          error={forced === "error" ? "Your feedback didn't send. It's still here; submit again." : null}
-          onSubmit={() => {
-            if (forced === "error") setForcedState(null);
-            setPhase("sending");
-            window.setTimeout(() => setPhase("sent"), 1000);
-          }}
-        />
-      </div>
-    </section>
+    <InterviewerFeedback
+      candidateName={candidateResume.name}
+      practicingFor={candidateResume.target.split(" · ")[1] ?? null}
+      historyHref={`/history/${historyId}`}
+      sent={phase === "sent"}
+      submitting={phase === "sending" || forced === "loading"}
+      error={forced === "error" ? "Your feedback didn't send. It's still here; submit again." : null}
+      onSubmit={() => {
+        if (forced === "error") setForcedState(null);
+        setPhase("sending");
+        window.setTimeout(() => setPhase("sent"), 1000);
+      }}
+    />
   );
 }
 
 export default function WrapUpPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { status, session } = useCallSession(id);
-  const [role] = useRole();
-  const forced = useForcedState();
   if (status === "missing") notFound();
   if (!session) {
     return (
@@ -198,43 +168,58 @@ export default function WrapUpPage({ params }: { params: Promise<{ id: string }>
   // Mock sessions point at mock history ids; real ones at themselves.
   const isMock = session.historyId !== id;
 
-  const isInterviewer = session.type === "human" && role === "interviewer";
-
   return (
     <div className="desk min-h-dvh">
-      <title>{isInterviewer ? "Leave feedback · hire-me-already" : "Processing · hire-me-already"}</title>
       <header className="mx-auto flex max-w-2xl px-4 pt-6 text-ink sm:px-0">
         <Link href="/dashboard" aria-label="hire-me-already, home">
           <Wordmark compact />
         </Link>
       </header>
       <main id="main" className="px-4 pt-10 pb-20 sm:px-6">
-        {isInterviewer ? (
-          <InterviewerFeedback historyId={session.historyId} />
-        ) : forced === "error" ? (
-          <div className="mx-auto max-w-lg">
-            <ErrorReturned title="We couldn't process this interview" onRetry={() => setForcedState(null)}>
-              The recording is saved, so nothing is lost. Try again, or we&apos;ll retry automatically and notify you.
-            </ErrorReturned>
-          </div>
-        ) : forced === "empty" ? (
-          <div className="sheet mx-auto max-w-lg">
-            <EmptyFolder
-              title="Too short to score"
-              action={<ButtonLink href={session.type === "ai" ? "/practice/ai" : "/practice/live"}>Try again</ButtonLink>}
-            >
-              We need at least two answered questions to give you a fair score. Nothing was filed.
-            </EmptyFolder>
-          </div>
+        {/* A real peer interview rates/awaits feedback; mock and AI interviews show processing. */}
+        {!isMock && session.type === "human" ? (
+          <PeerWrapUp id={id} />
         ) : (
-          isMock ? (
-            <MockProcessing historyId={session.historyId} hold={forced === "loading"} />
-          ) : (
-            <LiveProcessing id={id} hold={forced === "loading"} />
-          )
+          <SessionWrapUp id={id} session={session} isMock={isMock} />
         )}
       </main>
-      <StatePreview className="fixed right-3 bottom-3 z-40" />
     </div>
+  );
+}
+
+function SessionWrapUp({ id, session, isMock }: { id: string; session: CallSession; isMock: boolean }) {
+  const [role] = useRole();
+  const forced = useForcedState();
+
+  // Only mock sessions reach here as human interviews; real ones go to PeerWrapUp.
+  const isInterviewer = session.type === "human" && role === "interviewer";
+
+  return (
+    <>
+      <title>{isInterviewer ? "Leave feedback · hire-me-already" : "Processing · hire-me-already"}</title>
+      {isInterviewer ? (
+        <MockInterviewerFeedback historyId={session.historyId} />
+      ) : forced === "error" ? (
+        <div className="mx-auto max-w-lg">
+          <ErrorReturned title="We couldn't process this interview" onRetry={() => setForcedState(null)}>
+            The recording is saved, so nothing is lost. Try again, or we&apos;ll retry automatically and notify you.
+          </ErrorReturned>
+        </div>
+      ) : forced === "empty" ? (
+        <div className="sheet mx-auto max-w-lg">
+          <EmptyFolder
+            title="Too short to score"
+            action={<ButtonLink href={session.type === "ai" ? "/practice/ai" : "/practice/live"}>Try again</ButtonLink>}
+          >
+            We need at least two answered questions to give you a fair score. Nothing was filed.
+          </EmptyFolder>
+        </div>
+      ) : isMock ? (
+        <MockProcessing historyId={session.historyId} hold={forced === "loading"} />
+      ) : (
+        <LiveProcessing id={id} hold={forced === "loading"} />
+      )}
+      <StatePreview className="fixed right-3 bottom-3 z-40" />
+    </>
   );
 }

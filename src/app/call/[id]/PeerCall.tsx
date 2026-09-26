@@ -110,10 +110,11 @@ function PeerRoom({ session }: { session: PeerSession }) {
     if (partnerGone) hangUp();
   }, [partnerGone, hangUp]);
 
-  async function leave(to = "/dashboard") {
+  // After a real conversation, both of you go to the wrap-up: the interviewer rates the
+  // candidate there. A call that never connected has nothing to wrap up.
+  async function leave(to = everConnected ? `/call/${interviewId}/wrap-up` : "/dashboard") {
     setLeaving(true);
     hangUp();
-    // TODO(PR 2): go to /call/{id}/wrap-up once the wrap-up and feedback routes land.
     await apiFetch(`/api/interviews/${interviewId}/peer`, {
       method: "PATCH",
       body: JSON.stringify({ event: "left" }),
