@@ -337,7 +337,7 @@ model Report {
 
 // ---------- Matching ----------
 
-// One row per user, upserted on join. Rows are matched with FOR UPDATE SKIP LOCKED
+// One row per user, upserted on join. Rows are matched under FOR UPDATE row locks
 // in src/lib/matching.ts.
 model QueueEntry {
   id          String        @id @default(cuid())
@@ -346,6 +346,7 @@ model QueueEntry {
   role        InterviewRole
   status      QueueStatus   @default(WAITING)
   jobTitle    String?
+  company     String? // interviewees only; copied onto the matched Interview
   interviewId String? // set on MATCHED; the partner picks it up on its next poll
   lastSeenAt  DateTime      @default(now()) // heartbeat; entries stale for >15s are never matched
   createdAt   DateTime      @default(now())

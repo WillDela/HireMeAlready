@@ -3,13 +3,15 @@
 import { notFound, useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
 import { WifiOff } from "lucide-react";
-import { candidateResume, suggestedQuestions } from "@/lib/mock";
+import { aiCaptions, callSessions, candidateResume, suggestedQuestions, type CallSession } from "@/lib/mock";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { useDevicePrefs } from "@/lib/rtc/device-prefs";
 import { apiFetch } from "@/lib/use-api";
 import { useCallSession } from "@/lib/use-call-session";
 import { AiInterviewer, type AiInterviewerHandle } from "@/components/call/AiInterviewer";
+import { AiOrb, type AiState } from "@/components/call/AiOrb";
 import { CallControls } from "@/components/call/CallControls";
 import { InterviewerSidePanel } from "@/components/call/InterviewerSidePanel";
 import { ReportDialog } from "@/components/call/ReportDialog";
@@ -18,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { StatePreview } from "@/components/ui/StatePreview";
+import { PeerCall } from "./PeerCall";
 
 function useElapsed(running: boolean) {
   const [s, setS] = useState(0);
@@ -29,28 +32,36 @@ function useElapsed(running: boolean) {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** Cycles the mock AI through speaking → listening → thinking. */
+function useAiScript(active: boolean) {
+  const [line, setLine] = useState(0);
+  const [state, setState] = useState<AiState>("speaking");
+  useEffect(() => {
+    if (!active) return;
+    const next: Record<AiState, [AiState, number]> = {
+      speaking: ["listening", 6500],
+      listening: ["thinking", 9000],
+      thinking: ["speaking", 1800],
+    };
+    const [to, ms] = next[state];
+    const t = window.setTimeout(() => {
+      if (to === "speaking") setLine((l) => (l + 1) % aiCaptions.length);
+      setState(to);
+    }, ms);
+    return () => window.clearTimeout(t);
+  }, [state, active]);
+  return { state, caption: aiCaptions[line] };
+}
+
 export default function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
-  const currentUser = useCurrentUser();
-  const { status, session } = useCallSession(id, currentUser.id);
-  const aiRef = useRef<AiInterviewerHandle>(null);
-  const endedRef = useRef(false);
-  const forced = useForcedState();
-  const [role] = useRole();
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(true);
-  const [panelOpen, setPanelOpen] = useState(true);
-  const [reportOpen, setReportOpen] = useState(false);
-  const [endOpen, setEndOpen] = useState(false);
-  const connected = !forced;
-  const elapsed = useElapsed(connected);
+  // Mock ids keep the scripted prototype; real ids are an AI or a matched peer interview.
+  const mock = callSessions[id];
+  return mock ? <CallRoom id={id} session={mock} live={false} /> : <RealCall id={id} />;
+}
 
-  // Close the mobile sheet by default on small screens.
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 1023px)").matches) setPanelOpen(false);
-  }, []);
-
+function RealCall({ id }: { id: string }) {
+  const { status, session } = useCallSession(id, useCurrentUser().id);
   if (status === "missing") notFound();
   if (!session) {
     return (
@@ -61,6 +72,37 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
       </div>
     );
   }
+  return session.type === "ai" ? <CallRoom id={id} session={session} live /> : <PeerCall id={id} />;
+}
+
+/**
+ * The call room for an AI interview (`live`: a real ElevenLabs session) and for the
+ * mock sessions used by the design previews (a scripted orb, nothing sent anywhere).
+ */
+function CallRoom({ id, session, live }: { id: string; session: CallSession; live: boolean }) {
+  const router = useRouter();
+  const currentUser = useCurrentUser();
+  const forced = useForcedState();
+  const [role] = useRole();
+  // Start muted / camera off if that's how you left the lobby.
+  const devicePrefs = useDevicePrefs();
+  const [micToggle, setMicOn] = useState<boolean | null>(null);
+  const [cameraToggle, setCameraOn] = useState<boolean | null>(null);
+  const micOn = micToggle ?? devicePrefs.micOn;
+  const cameraOn = cameraToggle ?? devicePrefs.cameraOn;
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
+  const connected = !forced;
+  const elapsed = useElapsed(connected);
+  const ai = useAiScript(!live && connected && session.type === "ai");
+  const aiRef = useRef<AiInterviewerHandle>(null);
+  const endedRef = useRef(false);
+
+  // Close the mobile sheet by default on small screens.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 1023px)").matches) setPanelOpen(false);
+  }, []);
 
   const isAi = session.type === "ai";
   const isInterviewer = !isAi && role === "interviewer";
@@ -73,13 +115,14 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
   function end() {
     if (endedRef.current) return;
     endedRef.current = true;
-    // Close the voice session first so ElevenLabs starts processing the transcript that
-    // /end's finalize step pulls.
-    aiRef.current?.end();
-    // Non-blocking: finalizing runs on the server, and the wrap-up page polls for it.
-    apiFetch(`/api/interviews/${id}/end`, { method: "POST" }).catch((err) =>
-      console.error("Couldn't end the interview:", err),
-    );
+    if (live) {
+      // Close the voice session first so ElevenLabs starts processing the transcript
+      // that /end's finalize step pulls. Non-blocking: the wrap-up page polls for it.
+      aiRef.current?.end();
+      apiFetch(`/api/interviews/${id}/end`, { method: "POST" }).catch((err) =>
+        console.error("Couldn't end the interview:", err),
+      );
+    }
     router.push(`/call/${id}/wrap-up`);
   }
 
@@ -106,8 +149,15 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
 
       <div className="flex min-h-0 flex-1">
         <main id="main" className="relative min-w-0 flex-1 px-3 pb-2 sm:px-4">
-          {isAi ? (
+          {isAi && live ? (
             <AiInterviewer interviewId={id} active={connected} muted={!micOn} onAgentEnded={end} handle={aiRef} />
+          ) : isAi ? (
+            <section aria-label="AI interviewer" className="relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[6px] bg-night-2 px-4">
+              <AiOrb state={ai.state} className="w-[min(78vw,26rem)] sm:w-[min(52vh,26rem)]" />
+              <p className="mt-4 max-w-[46ch] text-center text-[1.0625rem] leading-relaxed text-ink sm:text-[1.1875rem]" aria-live="polite">
+                {ai.state === "speaking" ? ai.caption : <span className="text-ink-2">{ai.state === "thinking" ? "…" : "Take your time. Answer out loud."}</span>}
+              </p>
+            </section>
           ) : (
             <VideoTile
               name={partner.name}
@@ -176,8 +226,8 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
         <CallControls
           micOn={micOn}
           cameraOn={cameraOn}
-          onToggleMic={() => setMicOn((v) => !v)}
-          onToggleCamera={() => setCameraOn((v) => !v)}
+          onToggleMic={() => setMicOn(!micOn)}
+          onToggleCamera={() => setCameraOn(!cameraOn)}
           onReport={() => setReportOpen(true)}
           onEnd={() => setEndOpen(true)}
           endLabel={isAi ? "End" : "Leave"}

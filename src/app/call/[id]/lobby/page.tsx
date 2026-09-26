@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useCallSession } from "@/lib/use-call-session";
@@ -17,14 +17,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
   const { status, session } = useCallSession(id, useCurrentUser().id);
   const router = useRouter();
   const forced = useForcedState();
-  const [checked, setChecked] = useState(false);
-  const [attempt, setAttempt] = useState(0);
   const [joining, setJoining] = useState(false);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setChecked(true), 900);
-    return () => window.clearTimeout(t);
-  }, [attempt]);
 
   if (status === "missing") notFound();
   if (!session) {
@@ -37,8 +30,8 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
     );
   }
 
-  const permission: Permission =
-    forced === "loading" ? "checking" : forced === "error" ? "denied" : forced === "empty" ? "none" : checked ? "granted" : "checking";
+  const forcedPermission: Permission | null =
+    forced === "loading" ? "checking" : forced === "error" ? "denied" : forced === "empty" ? "none" : null;
 
   const back = session.type === "ai" ? "/practice/ai" : "/practice/live";
 
@@ -62,13 +55,9 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
           </p>
         </header>
         <DeviceCheck
-          permission={permission}
+          forcedPermission={forcedPermission}
           joining={joining}
-          onRetry={() => {
-            setForcedState(null);
-            setChecked(false);
-            setAttempt((a) => a + 1);
-          }}
+          onRetry={() => setForcedState(null)}
           onJoin={() => {
             setJoining(true);
             router.push(`/call/${id}`);

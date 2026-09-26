@@ -34,7 +34,7 @@ export function useApiResource<T>(
 ) {
   const { pollMs = 2000 } = options;
   const forced = useForcedState();
-  const [state, setState] = useState<{ phase: "loading" | "done" | "error"; data: T | null }>({
+  const [state, setState] = useState<{ phase: "loading" | "done" | "error"; data: T | null; error?: unknown }>({
     phase: "loading",
     data: null,
   });
@@ -54,8 +54,8 @@ export function useApiResource<T>(
         if (cancelled) return;
         setState({ phase: "done", data });
         if (optionsRef.current.pollWhile?.(data)) timer = window.setTimeout(load, pollMs);
-      } catch {
-        if (!cancelled) setState((s) => ({ phase: "error", data: s.data }));
+      } catch (error) {
+        if (!cancelled) setState((s) => ({ phase: "error", data: s.data, error }));
       }
     }
     load();
@@ -76,9 +76,11 @@ export function useApiResource<T>(
   const mutate = useCallback((data: T) => setState({ phase: "done", data }), []);
 
   const { phase, data } = state;
+  /** The failed request's ApiError (its `status` tells a 404 from an outage), if any. */
+  const error = phase === "error" && state.error instanceof ApiError ? state.error : null;
   const status: Status =
     forced ??
     (phase === "loading" ? "loading" : phase === "error" ? "error" : options.isEmpty?.(data as T) ? "empty" : "ready");
 
-  return { status, data, retry, reload, mutate };
+  return { status, data, error, retry, reload, mutate };
 }
