@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
-import { friendRequests, getInterview, lastInterview } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
+import { friendRequests } from "@/lib/mock";
+import { useApiResource } from "@/lib/use-api";
+import type { HistoryItem } from "@/lib/views";
 import { FriendRow } from "@/components/FriendRow";
 import { TypeTag } from "@/components/InterviewTable";
 import { PracticeFolder } from "@/components/PracticeFolder";
@@ -14,8 +15,7 @@ import { PaperClip } from "@/components/ui/PaperClip";
 import { ScoreStamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned, LoadingSheets } from "@/components/ui/States";
 
-function LastScore() {
-  const detail = getInterview(lastInterview.id);
+function LastScore({ lastInterview }: { lastInterview: HistoryItem }) {
   return (
     <section aria-labelledby="last-heading" className="sheet relative px-5 pt-11 pb-5 sm:px-6">
       <PaperClip className="left-7 rotate-[-8deg]" />
@@ -33,10 +33,10 @@ function LastScore() {
         </div>
         {lastInterview.score !== null ? <ScoreStamp score={lastInterview.score} size={104} land /> : null}
       </div>
-      {detail?.analysis ? (
+      {lastInterview.workOnNext ? (
         <p className="mt-5 border-t border-edge pt-4 text-[0.9375rem] leading-relaxed">
           <span className="font-bold">Work on next: </span>
-          <mark className="hl box-decoration-clone px-0.5">{detail.analysis.improvements[0].point}</mark>
+          <mark className="hl box-decoration-clone px-0.5">{lastInterview.workOnNext}</mark>
         </p>
       ) : null}
       <Link
@@ -115,7 +115,10 @@ function Requests({ empty }: { empty: boolean }) {
 
 export default function DashboardPage() {
   const currentUser = useCurrentUser();
-  const { status, retry } = useMockResource(lastInterview);
+  const { status, data, retry } = useApiResource<HistoryItem[]>("/api/interviews", {
+    isEmpty: (d) => d.length === 0,
+  });
+  const lastInterview = data?.[0];
 
   return (
     <>
@@ -171,7 +174,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="sheet-in">
-              <LastScore />
+              {lastInterview ? <LastScore lastInterview={lastInterview} /> : null}
             </div>
           )}
         </div>

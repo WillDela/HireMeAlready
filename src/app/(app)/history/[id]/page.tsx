@@ -4,8 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { use, useState } from "react";
 import { ArrowLeft, Check, Lightbulb, Mail, UserPlus } from "lucide-react";
-import { getInterview, type InterviewDetail } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
+import { useApiResource } from "@/lib/use-api";
+import type { HistoryDetail as InterviewDetail } from "@/lib/views";
 import { TypeTag } from "@/components/InterviewTable";
 import { ScoreCard } from "@/components/ScoreCard";
 import { TranscriptView } from "@/components/TranscriptView";
@@ -63,6 +63,20 @@ function Summary({ iv, onJump }: { iv: InterviewDetail; onJump: () => void }) {
 }
 
 function Analysis({ iv }: { iv: InterviewDetail }) {
+  if (!iv.analysis && iv.analysisStatus === "pending") {
+    return (
+      <EmptyFolder title="Scoring your answers">
+        The analysis usually takes a minute or two after the interview ends. This page updates when it&apos;s ready.
+      </EmptyFolder>
+    );
+  }
+  if (!iv.analysis && iv.analysisStatus === "failed") {
+    return (
+      <EmptyFolder title="We couldn't score this one">
+        Something went wrong reading this interview. Your transcript and any interviewer feedback are still in the other tabs.
+      </EmptyFolder>
+    );
+  }
   if (!iv.analysis) {
     return (
       <EmptyFolder title="Not scored">
@@ -100,12 +114,14 @@ function Analysis({ iv }: { iv: InterviewDetail }) {
             {a.improvements.map((w) => (
               <li key={w.point} className="text-[0.9375rem] leading-relaxed">
                 <p className="font-semibold">{w.point}</p>
-                <p className="mt-1.5 flex gap-2 text-ink-2">
-                  <Lightbulb size={17} aria-hidden="true" className="mt-0.5 flex-none text-manila-ink" />
-                  <span>
-                    <span className="hl rounded-[2px] px-1 font-semibold">Try this</span> {w.tryThis}
-                  </span>
-                </p>
+                {w.tryThis ? (
+                  <p className="mt-1.5 flex gap-2 text-ink-2">
+                    <Lightbulb size={17} aria-hidden="true" className="mt-0.5 flex-none text-manila-ink" />
+                    <span>
+                      <span className="hl rounded-[2px] px-1 font-semibold">Try this</span> {w.tryThis}
+                    </span>
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -175,6 +191,19 @@ function Feedback({ iv }: { iv: InterviewDetail }) {
   );
 }
 
+function Transcript({ iv }: { iv: InterviewDetail }) {
+  if (iv.transcript.length) return <TranscriptView turns={iv.transcript} />;
+  return iv.transcriptStatus === "failed" ? (
+    <EmptyFolder title="No transcript for this one">
+      We couldn&apos;t get a transcript from the recording. Any analysis and feedback are still in the other tabs.
+    </EmptyFolder>
+  ) : (
+    <EmptyFolder title="Transcript on its way">
+      It&apos;s written up a minute or two after the interview ends. This page updates when it&apos;s ready.
+    </EmptyFolder>
+  );
+}
+
 function People({ iv }: { iv: InterviewDetail }) {
   const [sent, setSent] = useState<Record<string, boolean>>({});
   if (iv.people.length === 0) {
@@ -193,16 +222,18 @@ function People({ iv }: { iv: InterviewDetail }) {
             <div className="min-w-0">
               <p className="font-bold">{p.name}</p>
               <p className="text-[0.875rem] text-ink-2">{p.headline}</p>
-              <a href={`mailto:${p.contact}`} className="mt-0.5 inline-flex items-center gap-1.5 text-[0.875rem] font-semibold underline">
-                <Mail size={14} aria-hidden="true" />
-                {p.contact}
-              </a>
+              {p.contact ? (
+                <a href={`mailto:${p.contact}`} className="mt-0.5 inline-flex items-center gap-1.5 text-[0.875rem] font-semibold underline">
+                  <Mail size={14} aria-hidden="true" />
+                  {p.contact}
+                </a>
+              ) : null}
             </div>
           </div>
           <div className="pl-[3.875rem] sm:pl-0">
             {p.isFriend ? (
               <span className="tag text-ink">Friends</span>
-            ) : sent[p.id] ? (
+            ) : sent[p.id] || p.requested ? (
               <Stamp tone="ink" land rotate={-5} className="text-[0.75rem]">
                 Request sent
               </Stamp>
@@ -226,50 +257,55 @@ function People({ iv }: { iv: InterviewDetail }) {
 
 export default function InterviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const iv = getInterview(id);
   const [tab, setTab] = useState<Tab>("summary");
-  const { status, retry } = useMockResource(iv);
-  if (!iv) notFound();
+  // Keep checking while the transcript or analysis is still being written.
+  const { status, data: iv, error, retry } = useApiResource<InterviewDetail>(`/api/interviews/${id}`, {
+    pollWhile: (d) => d.transcriptStatus === "pending" || d.analysisStatus === "pending",
+    pollMs: 5000,
+  });
+  if (error?.status === 404) notFound();
 
   return (
     <>
-      <title>{`${iv.company} · History`}</title>
+      <title>{`${iv?.company ?? "Interview"} · History`}</title>
       <Link href="/history" className="-mt-2 mb-4 inline-flex min-h-11 items-center gap-2 text-[0.9375rem] font-semibold text-manila-ink hover:text-ink">
         <ArrowLeft size={17} aria-hidden="true" /> All interviews
       </Link>
 
-      <header className="mb-8 flex items-start justify-between gap-4 sm:items-end">
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-[0.875rem] text-manila-ink">
-            <TypeTag type={iv.type} />
-            <time dateTime={iv.date}>{iv.dateLabel}</time>
-            <span aria-hidden="true">·</span>
-            <span className="tnum">{iv.duration}</span>
-          </p>
-          <h1 className="wide mt-3 text-[2rem] leading-[1.02] font-extrabold tracking-[-0.025em] md:text-[2.75rem]">
-            {iv.company}
-          </h1>
-          <p className="mt-1.5 text-[1.0625rem] text-manila-ink">
-            {iv.jobTitle} · {iv.type === "ai" ? "with the AI interviewer" : `with ${iv.partner}`}
-          </p>
-        </div>
-        <div className="flex-none pt-8 sm:pt-0 sm:pr-4">
-          {status === "ready" && iv.score !== null ? (
-            <>
-              <span className="sm:hidden">
-                <ScoreStamp score={iv.score} size={84} land />
-              </span>
-              <span className="hidden sm:inline">
-                <ScoreStamp score={iv.score} size={128} land />
-              </span>
-            </>
-          ) : status === "ready" ? (
-            <Stamp tone="muted" rotate={-6} className="text-[1rem]">
-              Not scored
-            </Stamp>
-          ) : null}
-        </div>
-      </header>
+      {iv ? (
+        <header className="mb-8 flex items-start justify-between gap-4 sm:items-end">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 text-[0.875rem] text-manila-ink">
+              <TypeTag type={iv.type} />
+              <time dateTime={iv.date}>{iv.dateLabel}</time>
+              <span aria-hidden="true">·</span>
+              <span className="tnum">{iv.duration}</span>
+            </p>
+            <h1 className="wide mt-3 text-[2rem] leading-[1.02] font-extrabold tracking-[-0.025em] md:text-[2.75rem]">
+              {iv.company}
+            </h1>
+            <p className="mt-1.5 text-[1.0625rem] text-manila-ink">
+              {iv.jobTitle} · {iv.type === "ai" ? "with the AI interviewer" : `with ${iv.partner}`}
+            </p>
+          </div>
+          <div className="flex-none pt-8 sm:pt-0 sm:pr-4">
+            {status === "ready" && iv.score !== null ? (
+              <>
+                <span className="sm:hidden">
+                  <ScoreStamp score={iv.score} size={84} land />
+                </span>
+                <span className="hidden sm:inline">
+                  <ScoreStamp score={iv.score} size={128} land />
+                </span>
+              </>
+            ) : status === "ready" ? (
+              <Stamp tone="muted" rotate={-6} className="text-[1rem]">
+                Not scored
+              </Stamp>
+            ) : null}
+          </div>
+        </header>
+      ) : null}
 
       <StateView
         status={status}
@@ -287,24 +323,26 @@ export default function InterviewDetailPage({ params }: { params: Promise<{ id: 
           </div>
         }
       >
-        <FolderTabs
-          label="Interview file"
-          value={tab}
-          onChange={(t) => setTab(t as Tab)}
-          tabs={[
-            { id: "summary", label: "Summary" },
-            { id: "transcript", label: "Transcript" },
-            { id: "analysis", label: "AI Analysis" },
-            { id: "feedback", label: "Interviewer Feedback" },
-            { id: "people", label: "People", count: iv.people.length },
-          ]}
-        >
-          {tab === "summary" ? <Summary iv={iv} onJump={() => setTab("transcript")} /> : null}
-          {tab === "transcript" ? <TranscriptView turns={iv.transcript} /> : null}
-          {tab === "analysis" ? <Analysis iv={iv} /> : null}
-          {tab === "feedback" ? <Feedback iv={iv} /> : null}
-          {tab === "people" ? <People iv={iv} /> : null}
-        </FolderTabs>
+        {iv ? (
+          <FolderTabs
+            label="Interview file"
+            value={tab}
+            onChange={(t) => setTab(t as Tab)}
+            tabs={[
+              { id: "summary", label: "Summary" },
+              { id: "transcript", label: "Transcript" },
+              { id: "analysis", label: "AI Analysis" },
+              { id: "feedback", label: "Interviewer Feedback" },
+              { id: "people", label: "People", count: iv.people.length },
+            ]}
+          >
+            {tab === "summary" ? <Summary iv={iv} onJump={() => setTab("transcript")} /> : null}
+            {tab === "transcript" ? <Transcript iv={iv} /> : null}
+            {tab === "analysis" ? <Analysis iv={iv} /> : null}
+            {tab === "feedback" ? <Feedback iv={iv} /> : null}
+            {tab === "people" ? <People iv={iv} /> : null}
+          </FolderTabs>
+        ) : null}
       </StateView>
     </>
   );
