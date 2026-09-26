@@ -61,10 +61,16 @@ export type ParsedResume = z.infer<typeof ParsedResume>;
 export const QuestionCategory = z.enum(["behavioral", "technical", "role-specific"]);
 export type QuestionCategory = z.infer<typeof QuestionCategory>;
 
+// What a question is drawn from, as labeled in the UI (mirrors Question.source).
+export const QuestionSource = z.enum(["company", "job", "general"]);
+export type QuestionSource = z.infer<typeof QuestionSource>;
+
 export const GeneratedQuestion = z.object({
   text: z.string(),
   category: QuestionCategory,
+  source: QuestionSource.optional(),
   rationale: z.string().optional(),
+  // Set only on questions candidates reported online: the page it was found on.
   sourceUrl: z.string().optional(),
 });
 export type GeneratedQuestion = z.infer<typeof GeneratedQuestion>;
@@ -109,9 +115,17 @@ export const CreateInterviewInput = z.object({
   jobTitle: z.string().min(1),
   company: z.string().min(1),
   jobDescription: z.string().optional(),
-  grounded: z.boolean().default(false), // use Google Search grounding for company-specific questions
+  grounded: z.boolean().default(false), // scrape the web for questions reported at this company
 });
 export type CreateInterviewInput = z.infer<typeof CreateInterviewInput>;
+
+// POST /api/ai/questions: the AI practice setup form.
+export const QuestionSetInput = z.object({
+  company: z.string().trim().min(1, "Enter the company you're applying to.").max(120),
+  jobTitle: z.string().trim().min(1, "Enter the job title from the posting.").max(120),
+  jobDescription: z.string().trim().max(15000, "Trim the job description a little.").optional(),
+});
+export type QuestionSetInput = z.infer<typeof QuestionSetInput>;
 
 export const JoinQueueInput = z.object({
   role: InterviewRole,
@@ -192,6 +206,9 @@ export type IceServersResponse = { iceServers: RTCIceServer[]; ttl: number };
 
 // POST /api/resume/upload-url
 export type UploadUrlResponse = { uploadUrl: string; storageKey: string; resumeId: string };
+
+// POST /api/ai/questions
+export type QuestionSetResponse = { questions: GeneratedQuestion[] };
 
 // POST /api/ai/signed-url
 export type AiSessionResponse = {

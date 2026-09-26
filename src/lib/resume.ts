@@ -14,6 +14,15 @@ export async function getActiveResumeView(userId: string) {
   return toResumeView(resume, await createDownloadUrl(resume.storageKey));
 }
 
+/** The user's active resume, parsed, or undefined if there's none or it isn't READY yet. */
+export async function getActiveParsedResume(userId: string): Promise<ParsedResume | undefined> {
+  const profile = await db.profile.findUnique({ where: { userId } });
+  if (!profile?.activeResumeId) return undefined;
+  const resume = await db.resume.findUnique({ where: { id: profile.activeResumeId } });
+  if (resume?.parseStatus !== "READY" || !resume.parsed) return undefined;
+  return ParsedResume.parse(resume.parsed);
+}
+
 /**
  * Background job (run through `after()`): PDF → Gemini parse → READY, then the
  * embedding used for matching. Parse errors mark the resume FAILED; an embedding

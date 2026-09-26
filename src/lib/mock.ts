@@ -207,6 +207,7 @@ export interface Question {
   text: string;
   source: QuestionSource;
   note?: string;
+  sourceUrl?: string; // the page a candidate reported it on
 }
 
 export const sourceLabel: Record<QuestionSource, string> = {
@@ -221,52 +222,6 @@ export const aiSetupDefaults = {
   jobDescription:
     "Northwind is hiring a Senior Product Designer for the Driver Experience team. You'll own the end-to-end design of our driver mobile app, partner with operations on route and delivery tooling, and help grow our design system. You have 4+ years of product design experience, a portfolio of shipped mobile work, and comfort running research with frontline workers.",
 };
-
-export const generatedQuestions: Question[] = [
-  {
-    id: "q1",
-    text: "Northwind's drivers work with gloves on, in bad light, often mid-delivery. How would you design a proof-of-delivery screen for those conditions?",
-    source: "company",
-    note: "Their careers page describes field research with drivers.",
-  },
-  {
-    id: "q2",
-    text: "Walk me through a mobile product you shipped end to end. What did you own, and what would you change now?",
-    source: "job",
-  },
-  {
-    id: "q3",
-    text: "Operations wants a feature that adds two taps for drivers. How do you handle that conversation?",
-    source: "company",
-    note: "Role partners closely with the operations team.",
-  },
-  {
-    id: "q4",
-    text: "How have you contributed to a design system that other teams depend on?",
-    source: "job",
-  },
-  {
-    id: "q5",
-    text: "Tell me about research you ran with people who had little time to talk to you.",
-    source: "job",
-  },
-  {
-    id: "q6",
-    text: "Describe a time you changed your design because of data you didn't expect.",
-    source: "general",
-  },
-  {
-    id: "q7",
-    text: "Why Northwind, and why the Driver Experience team specifically?",
-    source: "company",
-  },
-];
-
-export const researchSteps = [
-  "Reading the job description",
-  "Looking up Northwind Logistics online",
-  "Matching questions to the role",
-];
 
 /** Suggested questions an interviewer receives for the matched candidate. */
 export const suggestedQuestions: Question[] = [
