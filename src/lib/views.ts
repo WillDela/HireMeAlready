@@ -1,6 +1,14 @@
 import type { GeneratedQuestion, ParsedResume } from "@/lib/contracts";
 import type { Profile, Question as QuestionRow, Resume } from "@/generated/prisma/client";
-import type { Experience, Question, QuestionSource, ParsedResume as ResumeScreenData, Role } from "@/lib/mock";
+import type {
+  Experience,
+  InterviewDetail,
+  InterviewSummary,
+  Question,
+  QuestionSource,
+  ParsedResume as ResumeScreenData,
+  Role,
+} from "@/lib/mock";
 
 // Row → screen shapes. The UI was built against the types in src/lib/mock.ts, so API
 // routes return those shapes and screens only swap where the data comes from.
@@ -116,6 +124,18 @@ export function toQuestionView(q: QuestionRow): Question {
     sourceUrl: q.sourceUrl ?? undefined,
   };
 }
+
+/** GET /api/interviews: a row on /history, plus the dashboard's "work on next" line. */
+export type HistoryItem = InterviewSummary & { workOnNext: string | null };
+
+/**
+ * GET /api/interviews/:id. `analysisStatus` says why `analysis` is null: you were the
+ * interviewer, scoring hasn't finished, or it failed. Same for the transcript.
+ */
+export type HistoryDetail = InterviewDetail & {
+  analysisStatus: "ready" | "pending" | "failed" | "interviewer";
+  transcriptStatus: "ready" | "pending" | "failed";
+};
 
 export function formatBytes(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
