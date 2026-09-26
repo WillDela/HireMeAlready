@@ -50,7 +50,7 @@ Shared interfaces live in `src/lib/contracts.ts` (zod schemas + types). `src/lib
 
 ## Droplet
 
-DigitalOcean droplet `104.131.187.142` (Ubuntu 24.04, 2 vCPU / 4 GB / 80 GB). Docker Engine and the Compose plugin are installed, and container logs rotate at 10 MB × 3.
+Domain `hiremealready.study` (Porkbun DNS; `.study` is a GoDaddy Registry TLD) with A records for `@` and `www` → DigitalOcean droplet `104.131.187.142` (Ubuntu 24.04, 2 vCPU / 4 GB / 80 GB). Docker Engine and the Compose plugin are installed, and container logs rotate at 10 MB × 3.
 
 The `ufw` firewall allows only: 22 (SSH), 80/443 (Caddy), 3478 tcp+udp and 5349 tcp (TURN), 49160–49200 udp (TURN relay; match `min-port`/`max-port` in coturn).
 
