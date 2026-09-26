@@ -206,6 +206,8 @@ export interface Question {
   id: string;
   text: string;
   source: QuestionSource;
+  // Set on generated questions; user-added ones have none.
+  category?: "behavioral" | "technical" | "role-specific";
   note?: string;
   sourceUrl?: string; // the page a candidate reported it on
 }
@@ -448,6 +450,7 @@ export interface InterviewDetail extends InterviewSummary {
     dimensions: Dimension[];
     strengths: string[];
     improvements: { point: string; tryThis: string }[];
+    perQuestion?: { question: string; answerSummary: string; feedback: string; score: number }[];
   } | null;
   feedback: {
     from: string;

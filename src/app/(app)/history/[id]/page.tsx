@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { use, useState } from "react";
 import { ArrowLeft, Check, Lightbulb, Mail, UserPlus } from "lucide-react";
-import { useApiResource } from "@/lib/use-api";
+import { apiFetch, useApiResource } from "@/lib/use-api";
 import type { HistoryDetail as InterviewDetail } from "@/lib/views";
 import { TypeTag } from "@/components/InterviewTable";
 import { ScoreCard } from "@/components/ScoreCard";
@@ -127,6 +127,28 @@ function Analysis({ iv }: { iv: InterviewDetail }) {
           </ul>
         </section>
       </div>
+      {a.perQuestion?.length ? (
+        <section aria-labelledby="per-q" className="mt-10">
+          <h2 id="per-q" className="text-[1.125rem] font-bold">
+            Question by question
+          </h2>
+          <ol className="mt-4 space-y-4">
+            {a.perQuestion.map((q, i) => (
+              <li key={i} className="rounded-[3px] border-[1.5px] border-edge p-4">
+                <div className="flex items-baseline justify-between gap-4">
+                  <p className="font-semibold">{q.question}</p>
+                  <p className="tnum cond flex-none text-[1.25rem] font-extrabold">
+                    {q.score.toFixed(1)}
+                    <span className="ml-0.5 text-[0.8125rem] font-semibold text-ink-3">/5</span>
+                  </p>
+                </div>
+                <p className="mt-2 text-[0.9375rem] text-ink-2">{q.answerSummary}</p>
+                <p className="mt-2 text-[0.9375rem] leading-relaxed">{q.feedback}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -206,6 +228,17 @@ function Transcript({ iv }: { iv: InterviewDetail }) {
 
 function People({ iv }: { iv: InterviewDetail }) {
   const [sent, setSent] = useState<Record<string, boolean>>({});
+  const [failed, setFailed] = useState<Record<string, boolean>>({});
+
+  function addFriend(userId: string) {
+    setSent((s) => ({ ...s, [userId]: true }));
+    setFailed((f) => ({ ...f, [userId]: false }));
+    apiFetch("/api/friends", { method: "POST", body: JSON.stringify({ userId }) }).catch(() => {
+      setSent((s) => ({ ...s, [userId]: false }));
+      setFailed((f) => ({ ...f, [userId]: true }));
+    });
+  }
+
   if (iv.people.length === 0) {
     return (
       <EmptyFolder title="Just you and the AI">
@@ -243,9 +276,9 @@ function People({ iv }: { iv: InterviewDetail }) {
                 size="sm"
                 icon={<UserPlus size={15} aria-hidden="true" />}
                 aria-label={`Add ${p.name} as a friend`}
-                onClick={() => setSent((s) => ({ ...s, [p.id]: true }))}
+                onClick={() => addFriend(p.id)}
               >
-                Add friend
+                {failed[p.id] ? "Didn't send. Try again" : "Add friend"}
               </Button>
             )}
           </div>

@@ -4,7 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowDown, ArrowRightLeft, ArrowUp, Check, Plus, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { QuestionSetInput, QuestionSetResponse } from "@/lib/contracts";
+import type {
+  CreateInterviewInput,
+  CreateInterviewResponse,
+  QuestionSetInput,
+  QuestionSetResponse,
+} from "@/lib/contracts";
 import { aiSetupDefaults, sourceLabel, type Question } from "@/lib/mock";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
@@ -159,7 +164,41 @@ export default function AiSetupPage() {
   const [reportedCount, setReportedCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const requestId = useRef(0);
+
+  // Files the edited questions as a real interview, then opens its lobby.
+  async function startInterview() {
+    setStarting(true);
+    setStartError(null);
+    const input: CreateInterviewInput = {
+      mode: "AI",
+      company: target.company,
+      jobTitle: target.jobTitle,
+      jobDescription: target.jobDescription,
+      grounded: false,
+      questions: questions
+        .filter((q) => q.text.trim())
+        .map((q) => ({
+          text: q.text.trim(),
+          // A question the user typed in has no category; it's about this role.
+          category: q.category ?? "role-specific",
+          source: q.source,
+          rationale: q.note,
+          sourceUrl: q.sourceUrl,
+        })),
+    };
+    try {
+      const { id } = await apiFetch<CreateInterviewResponse>("/api/interviews", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      router.push(`/call/${id}/lobby`);
+    } catch (err) {
+      setStarting(false);
+      setStartError(err instanceof ApiError ? err.message : "We couldn't start the interview. Try again.");
+    }
+  }
 
   const shown: Phase =
     forced === "loading" ? "generating" : forced === "error" ? "error" : forced === "empty" ? "idle" : phase;
@@ -192,6 +231,7 @@ export default function AiSetupPage() {
           id: `q${id}-${i}`,
           text: q.text,
           source: q.source ?? "general",
+          category: q.category,
           note: q.rationale,
           sourceUrl: q.sourceUrl,
         })),
@@ -348,16 +388,19 @@ export default function AiSetupPage() {
                     </Button>
                   </div>
                   <div className="flex flex-col items-stretch gap-2 px-2 pt-4 pb-1 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-[0.8125rem] text-manila-ink">The AI asks these in order and adds follow-ups.</p>
+                    {startError ? (
+                      <p role="alert" className="text-[0.875rem] font-semibold text-stamp">
+                        {startError}
+                      </p>
+                    ) : (
+                      <p className="text-[0.8125rem] text-manila-ink">The AI asks these in order and adds follow-ups.</p>
+                    )}
                     <Button
                       size="lg"
                       disabled={questions.filter((q) => q.text.trim()).length === 0}
                       loading={starting}
                       loadingLabel="Opening lobby…"
-                      onClick={() => {
-                        setStarting(true);
-                        router.push("/call/ai-northwind/lobby");
-                      }}
+                      onClick={startInterview}
                     >
                       Start interview
                     </Button>

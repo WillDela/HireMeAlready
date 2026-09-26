@@ -2,8 +2,8 @@
 
 import { useEffect, useId, useState } from "react";
 import { Search, UserPlus } from "lucide-react";
-import { friendRequests, friends as initialFriends, peopleDirectory } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
+import type { FriendsResponse, PersonSearchResult } from "@/lib/contracts";
+import { apiFetch, useApiResource } from "@/lib/use-api";
 import { FriendRow } from "@/components/FriendRow";
 import { Button } from "@/components/ui/Button";
 import { FolderTabs } from "@/components/ui/FolderTabs";
@@ -15,12 +15,14 @@ type Tab = "friends" | "requests" | "find";
 
 export default function FriendsPage() {
   const [tab, setTab] = useState<Tab>("friends");
-  const [roster, setRoster] = useState(initialFriends);
-  const [requests, setRequests] = useState(friendRequests);
-  const [sent, setSent] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PersonSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
   const searchId = useId();
-  const { status, retry } = useMockResource(roster);
+  const { status, data, retry, mutate } = useApiResource<FriendsResponse>("/api/friends", {
+    isEmpty: (d) => d.friends.length === 0 && d.incoming.length === 0,
+  });
 
   // Deep links from notifications and the dashboard: /friends?tab=requests
   useEffect(() => {
@@ -28,17 +30,63 @@ export default function FriendsPage() {
     if (t === "requests" || t === "find") setTab(t);
   }, []);
 
-  const incoming = requests.filter((r) => r.direction === "incoming");
-  const outgoing = requests.filter((r) => r.direction === "outgoing");
-  const q = query.trim().toLowerCase();
-  const results = peopleDirectory.filter(
-    (p) => !q || p.name.toLowerCase().includes(q) || p.headline.toLowerCase().includes(q),
-  );
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return;
+    const t = window.setTimeout(() => {
+      setSearching(true);
+      apiFetch<PersonSearchResult[]>(`/api/friends/search?q=${encodeURIComponent(q)}`)
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [query]);
 
-  const empty = status === "empty";
-  const list = empty ? [] : roster;
-  const inc = empty ? [] : incoming;
-  const out = empty ? [] : outgoing;
+  const shownResults = query.trim() ? results : [];
+
+  const friends = data?.friends ?? [];
+  const incoming = data?.incoming ?? [];
+  const outgoing = data?.outgoing ?? [];
+
+  async function withBusy(id: string, fn: () => Promise<void>) {
+    setBusy((b) => ({ ...b, [id]: true }));
+    try {
+      await fn();
+    } finally {
+      setBusy((b) => ({ ...b, [id]: false }));
+    }
+  }
+
+  function respond(requestId: string, decision: "ACCEPTED" | "DECLINED") {
+    return withBusy(requestId, async () => {
+      const next = await apiFetch<FriendsResponse>(`/api/friends/${requestId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: decision }),
+      });
+      mutate(next);
+    });
+  }
+
+  function removeFriendship(friendshipId: string) {
+    return withBusy(friendshipId, async () => {
+      const next = await apiFetch<FriendsResponse>(`/api/friends/${friendshipId}`, {
+        method: "DELETE",
+      });
+      mutate(next);
+    });
+  }
+
+  function sendRequest(userId: string) {
+    return withBusy(userId, async () => {
+      const next = await apiFetch<FriendsResponse>("/api/friends", {
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      });
+      mutate(next);
+      setResults((r) => r.map((p) => (p.id === userId ? { ...p, status: "outgoing" } : p)));
+    });
+  }
 
   return (
     <>
@@ -53,8 +101,8 @@ export default function FriendsPage() {
         value={tab}
         onChange={(t) => setTab(t as Tab)}
         tabs={[
-          { id: "friends", label: "Friends", count: list.length },
-          { id: "requests", label: "Requests", count: inc.length },
+          { id: "friends", label: "Friends", count: friends.length },
+          { id: "requests", label: "Requests", count: incoming.length },
           { id: "find", label: "Find people" },
         ]}
       >
@@ -71,7 +119,7 @@ export default function FriendsPage() {
           empty={null}
         >
           {tab === "friends" ? (
-            list.length === 0 ? (
+            friends.length === 0 ? (
               <EmptyFolder
                 title="No friends yet"
                 action={
@@ -84,17 +132,12 @@ export default function FriendsPage() {
               </EmptyFolder>
             ) : (
               <ul className="divide-y divide-edge" aria-label="Friends">
-                {list.map((f) => (
+                {friends.map((f) => (
                   <FriendRow
-                    key={f.id}
+                    key={f.friendshipId}
                     person={f}
-                    status={f.status}
-                    meta={
-                      f.sharedInterviews
-                        ? `${f.sharedInterviews} ${f.sharedInterviews === 1 ? "interview" : "interviews"} together`
-                        : "No interviews together yet"
-                    }
-                    onRemove={(id) => setRoster((r) => r.filter((x) => x.id !== id))}
+                    meta={f.sharedInterviews ? `${f.sharedInterviews} ${f.sharedInterviews === 1 ? "interview" : "interviews"} together` : "No interviews together yet"}
+                    onRemove={() => removeFriendship(f.friendshipId)}
                   />
                 ))}
               </ul>
@@ -106,32 +149,31 @@ export default function FriendsPage() {
               <h2 className="cond border-b border-edge px-5 pt-5 pb-2 text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">
                 Received
               </h2>
-              {inc.length === 0 ? (
+              {incoming.length === 0 ? (
                 <p className="px-5 py-6 text-[0.9375rem] text-ink-2">No requests waiting for you.</p>
               ) : (
                 <ul className="divide-y divide-edge" aria-label="Received requests">
-                  {inc.map((r) => (
+                  {incoming.map((r) => (
                     <FriendRow
-                      key={r.id}
+                      key={r.requestId}
                       person={r}
-                      meta={`${r.mutual ? `${r.mutual} mutual · ` : ""}Sent ${r.sent}`}
+                      meta={`Sent ${new Date(r.sentAt).toLocaleDateString()}`}
                       actions={
                         <>
                           <Button
                             size="sm"
+                            loading={busy[r.requestId]}
                             aria-label={`Accept ${r.name}`}
-                            onClick={() => {
-                              setRequests((all) => all.filter((x) => x.id !== r.id));
-                              setRoster((all) => [...all, { ...r, sharedInterviews: 0, status: "offline" }]);
-                            }}
+                            onClick={() => respond(r.requestId, "ACCEPTED")}
                           >
                             Accept
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
+                            disabled={busy[r.requestId]}
                             aria-label={`Decline ${r.name}`}
-                            onClick={() => setRequests((all) => all.filter((x) => x.id !== r.id))}
+                            onClick={() => respond(r.requestId, "DECLINED")}
                           >
                             Decline
                           </Button>
@@ -144,21 +186,22 @@ export default function FriendsPage() {
               <h2 className="cond border-y border-edge px-5 pt-5 pb-2 text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">
                 Sent
               </h2>
-              {out.length === 0 ? (
+              {outgoing.length === 0 ? (
                 <p className="px-5 py-6 text-[0.9375rem] text-ink-2">You haven&apos;t sent any requests.</p>
               ) : (
                 <ul className="divide-y divide-edge" aria-label="Sent requests">
-                  {out.map((r) => (
+                  {outgoing.map((r) => (
                     <FriendRow
-                      key={r.id}
+                      key={r.requestId}
                       person={r}
-                      meta={`Sent ${r.sent}`}
+                      meta={`Sent ${new Date(r.sentAt).toLocaleDateString()}`}
                       actions={
                         <Button
                           size="sm"
                           variant="ghost"
+                          loading={busy[r.requestId]}
                           aria-label={`Cancel request to ${r.name}`}
-                          onClick={() => setRequests((all) => all.filter((x) => x.id !== r.id))}
+                          onClick={() => removeFriendship(r.requestId)}
                         >
                           Cancel request
                         </Button>
@@ -174,7 +217,7 @@ export default function FriendsPage() {
             <div>
               <div className="border-b border-edge p-5">
                 <label htmlFor={searchId} className="field-label">
-                  Search by name or role
+                  Search by name
                 </label>
                 <div className="relative max-w-md">
                   <Search size={17} aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-3" />
@@ -182,38 +225,50 @@ export default function FriendsPage() {
                     id={searchId}
                     type="search"
                     className="input !pl-10"
-                    placeholder="e.g. designer, Omar"
+                    placeholder="e.g. Priya"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
                 </div>
                 <p className="field-hint" aria-live="polite">
-                  {q ? `${results.length} ${results.length === 1 ? "person" : "people"} found` : "People who allow discovery in their settings."}
+                  {query.trim()
+                    ? searching
+                      ? "Searching…"
+                      : `${shownResults.length} ${shownResults.length === 1 ? "person" : "people"} found`
+                    : "People who allow discovery in their settings."}
                 </p>
               </div>
-              {results.length === 0 ? (
+              {query.trim() && !searching && shownResults.length === 0 ? (
                 <EmptyFolder compact title={`No one matches “${query}”`}>
-                  Try a first name or a role like “researcher”.
+                  Try a first or last name.
                 </EmptyFolder>
               ) : (
                 <ul className="divide-y divide-edge" aria-label="Search results">
-                  {results.map((p) => (
+                  {shownResults.map((p) => (
                     <FriendRow
                       key={p.id}
                       person={p}
-                      meta={p.mutual ? `${p.mutual} mutual ${p.mutual === 1 ? "friend" : "friends"}` : undefined}
                       actions={
-                        sent[p.id] ? (
+                        p.status === "friends" ? (
+                          <Stamp tone="ink" land rotate={-5} className="text-[0.75rem]">
+                            Friends
+                          </Stamp>
+                        ) : p.status === "outgoing" ? (
                           <Stamp tone="ink" land rotate={-5} className="text-[0.75rem]">
                             Request sent
                           </Stamp>
+                        ) : p.status === "incoming" ? (
+                          <Button size="sm" onClick={() => setTab("requests")}>
+                            Respond to their request
+                          </Button>
                         ) : (
                           <Button
                             variant="secondary"
                             size="sm"
+                            loading={busy[p.id]}
                             icon={<UserPlus size={15} aria-hidden="true" />}
                             aria-label={`Add ${p.name} as a friend`}
-                            onClick={() => setSent((s) => ({ ...s, [p.id]: true }))}
+                            onClick={() => sendRequest(p.id)}
                           >
                             Add friend
                           </Button>

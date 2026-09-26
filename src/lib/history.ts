@@ -100,6 +100,7 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
           strengths: analysis.strengths,
           // AnalysisResult has no separate tip per improvement; the page hides an empty one.
           improvements: analysis.improvements.map((point) => ({ point, tryThis: "" })),
+          perQuestion: analysis.perQuestion.map((q) => ({ ...q, score: outOf5(q.score) })),
         }
       : null,
     feedback: feedback
