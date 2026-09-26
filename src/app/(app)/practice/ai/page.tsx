@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowDown, ArrowRightLeft, ArrowUp, Check, Plus, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { aiSetupDefaults, generatedQuestions, researchSteps, sourceLabel, type Question } from "@/lib/mock";
+import type { QuestionSetInput, QuestionSetResponse } from "@/lib/contracts";
+import { aiSetupDefaults, sourceLabel, type Question } from "@/lib/mock";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { ApiError, apiFetch } from "@/lib/use-api";
 import { Button } from "@/components/ui/Button";
 import { TextAreaField, TextField } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -15,12 +17,30 @@ import { EmptyFolder, ErrorReturned } from "@/components/ui/States";
 
 type Phase = "idle" | "generating" | "ready" | "error";
 
+// The request doesn't report progress, so these advance on a timer and hold on the last
+// step until the questions arrive. Roughly the pipeline in generateQuestions.
+const researchSteps = (company: string) => [
+  "Reading the role",
+  `Searching for questions asked at ${company}`,
+  "Checking which sources hold up",
+  "Writing questions for the role",
+];
+const STEP_MS = 2500;
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "the web";
+  }
+};
+
 function Generating({ company, step }: { company: string; step: number }) {
   return (
     <div role="status" aria-live="polite" className="sheet p-6">
       <h2 className="text-[1.125rem] font-bold">Writing questions for {company || "this company"}</h2>
       <ol className="mt-4 space-y-3">
-        {researchSteps.map((s, i) => (
+        {researchSteps(company || "the company").map((s, i) => (
           <li key={s} className={cn("flex items-center gap-3 text-[0.9375rem]", i > step && "text-ink-3")}>
             {i < step ? (
               <Check size={18} aria-hidden="true" className="text-ink" />
@@ -29,7 +49,7 @@ function Generating({ company, step }: { company: string; step: number }) {
             ) : (
               <span aria-hidden="true" className="h-[18px] w-[18px] rounded-full border-[1.5px] border-edge" />
             )}
-            {s.replace("Northwind Logistics", company || "the company")}
+            {s}
             {i < step ? <span className="visually-hidden"> (done)</span> : null}
           </li>
         ))}
@@ -73,7 +93,18 @@ function QuestionList({
             />
             <div className="mt-1 flex flex-wrap items-center justify-between gap-2 px-2">
               <span className="flex flex-wrap items-center gap-2">
-                <span className="tag text-manila-ink">{sourceLabel[q.source]}</span>
+                {q.sourceUrl ? (
+                  <a
+                    href={q.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="tag text-manila-ink hover:underline"
+                  >
+                    Reported on {hostOf(q.sourceUrl)}
+                  </a>
+                ) : (
+                  <span className="tag text-manila-ink">{sourceLabel[q.source]}</span>
+                )}
                 {q.note ? <span className="text-[0.8125rem] text-ink-2">{q.note}</span> : null}
               </span>
               <span className="flex gap-0.5">
@@ -123,35 +154,62 @@ export default function AiSetupPage() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [step, setStep] = useState(0);
   const [questions, setQuestions] = useState<Question[]>([]);
+  // What the current (or last) question set was generated for.
+  const [target, setTarget] = useState<QuestionSetInput>({ company: "", jobTitle: "" });
+  const [reportedCount, setReportedCount] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const requestId = useRef(0);
 
   const shown: Phase =
     forced === "loading" ? "generating" : forced === "error" ? "error" : forced === "empty" ? "idle" : phase;
 
   useEffect(() => {
     if (phase !== "generating") return;
-    if (step >= researchSteps.length) {
-      const t = window.setTimeout(() => {
-        setQuestions(generatedQuestions);
-        setPhase("ready");
-      }, 300);
-      return () => window.clearTimeout(t);
-    }
-    const t = window.setTimeout(() => setStep((s) => s + 1), 750);
-    return () => window.clearTimeout(t);
-  }, [phase, step]);
+    const last = researchSteps("").length - 1;
+    const t = window.setInterval(() => setStep((s) => Math.min(s + 1, last)), STEP_MS);
+    return () => window.clearInterval(t);
+  }, [phase]);
 
   const errors = {
     company: submitted && !company.trim() ? "Enter the company you're applying to." : null,
     jobTitle: submitted && !jobTitle.trim() ? "Enter the job title from the posting." : null,
   };
 
+  async function run(input: QuestionSetInput) {
+    const id = ++requestId.current;
+    setTarget(input);
+    setStep(0);
+    setPhase("generating");
+    try {
+      const res = await apiFetch<QuestionSetResponse>("/api/ai/questions", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      if (id !== requestId.current) return; // a newer request replaced this one
+      setQuestions(
+        res.questions.map((q, i) => ({
+          id: `q${id}-${i}`,
+          text: q.text,
+          source: q.source ?? "general",
+          note: q.rationale,
+          sourceUrl: q.sourceUrl,
+        })),
+      );
+      setReportedCount(res.questions.filter((q) => q.sourceUrl).length);
+      setPhase("ready");
+    } catch (err) {
+      if (id !== requestId.current) return;
+      setErrorMessage(err instanceof ApiError && err.status === 400 ? err.message : null);
+      setPhase("error");
+    }
+  }
+
   function generate(e: FormEvent) {
     e.preventDefault();
     setSubmitted(true);
     if (!company.trim() || !jobTitle.trim()) return;
-    setStep(0);
-    setPhase("generating");
+    run({ company: company.trim(), jobTitle: jobTitle.trim(), jobDescription: jd.trim() || undefined });
   }
 
   if (role === "interviewer") {
@@ -242,15 +300,17 @@ export default function AiSetupPage() {
               Question preview
             </h2>
             {shown === "generating" ? (
-              <Generating company={company || aiSetupDefaults.company} step={step} />
+              <Generating company={target.company} step={step} />
             ) : shown === "error" ? (
-              <ErrorReturned title={`We couldn't research ${company || "that company"}`} onRetry={() => {
+              <ErrorReturned
+                title={`We couldn't write questions for ${target.company || "that company"}`}
+                onRetry={() => {
                   setForcedState(null);
-                  setStep(0);
-                  setPhase("generating");
-                }}>
-                We found too little about it online to write specific questions. Check the spelling, or paste the job
-                description and we&apos;ll work from that.
+                  if (target.company) run(target);
+                  else setPhase("idle");
+                }}
+              >
+                {errorMessage ?? "The question writer is busy right now. Give it a minute and try again."}
               </ErrorReturned>
             ) : (
               <div className="relative pt-7 sheet-in">
@@ -259,12 +319,17 @@ export default function AiSetupPage() {
                   <div className="sheet p-5 sm:p-6">
                     <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-ink/80 pb-3">
                       <p className="font-bold">
-                        {jobTitle || aiSetupDefaults.jobTitle} · {company || aiSetupDefaults.company}
+                        {target.jobTitle} · {target.company}
                       </p>
                       <p className="tnum text-[0.875rem] text-ink-2" aria-live="polite">
                         {questions.length} questions · about {Math.max(5, questions.length * 3 + 4)} min
                       </p>
                     </div>
+                    <p className="pt-3 text-[0.875rem] text-ink-2">
+                      {reportedCount > 0
+                        ? `${reportedCount} ${reportedCount === 1 ? "was" : "were"} reported by candidates online, linked to where we found ${reportedCount === 1 ? "it" : "them"}. The rest are written for this role.`
+                        : `We couldn't find interview reports for ${target.company} that we trust, so these are written for this role.`}
+                    </p>
                     {questions.length === 0 ? (
                       <EmptyFolder compact title="No questions left">
                         Add your own below, or generate a fresh set.
