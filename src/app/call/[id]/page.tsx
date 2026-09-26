@@ -3,11 +3,12 @@
 import { notFound, useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { WifiOff } from "lucide-react";
-import { aiCaptions, callSessions, candidateResume, suggestedQuestions } from "@/lib/mock";
+import { callSessions, candidateResume, suggestedQuestions } from "@/lib/mock";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
-import { AiOrb, type AiState } from "@/components/call/AiOrb";
+import { apiFetch } from "@/lib/use-api";
+import { AiInterviewer } from "@/components/call/AiInterviewer";
 import { CallControls } from "@/components/call/CallControls";
 import { InterviewerSidePanel } from "@/components/call/InterviewerSidePanel";
 import { ReportDialog } from "@/components/call/ReportDialog";
@@ -27,27 +28,6 @@ function useElapsed(running: boolean) {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** Cycles the mock AI through speaking → listening → thinking. */
-function useAiScript(active: boolean) {
-  const [line, setLine] = useState(0);
-  const [state, setState] = useState<AiState>("speaking");
-  useEffect(() => {
-    if (!active) return;
-    const next: Record<AiState, [AiState, number]> = {
-      speaking: ["listening", 6500],
-      listening: ["thinking", 9000],
-      thinking: ["speaking", 1800],
-    };
-    const [to, ms] = next[state];
-    const t = window.setTimeout(() => {
-      if (to === "speaking") setLine((l) => (l + 1) % aiCaptions.length);
-      setState(to);
-    }, ms);
-    return () => window.clearTimeout(t);
-  }, [state, active]);
-  return { state, caption: aiCaptions[line] };
-}
-
 export default function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const session = callSessions[id];
@@ -62,7 +42,6 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
   const [endOpen, setEndOpen] = useState(false);
   const connected = !forced;
   const elapsed = useElapsed(connected);
-  const ai = useAiScript(connected && session?.type === "ai");
 
   // Close the mobile sheet by default on small screens.
   useEffect(() => {
@@ -79,6 +58,9 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
   const panelId = "candidate-file";
 
   function end() {
+    // Best-effort: triggers transcript + analysis on the server. Non-blocking so the
+    // UI never waits on it, and harmless if the interview API isn't wired up yet.
+    apiFetch(`/api/interviews/${id}/end`, { method: "POST" }).catch(() => {});
     router.push(`/call/${id}/wrap-up`);
   }
 
@@ -106,12 +88,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
       <div className="flex min-h-0 flex-1">
         <main id="main" className="relative min-w-0 flex-1 px-3 pb-2 sm:px-4">
           {isAi ? (
-            <section aria-label="AI interviewer" className="relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[6px] bg-night-2 px-4">
-              <AiOrb state={ai.state} className="w-[min(78vw,26rem)] sm:w-[min(52vh,26rem)]" />
-              <p className="mt-4 max-w-[46ch] text-center text-[1.0625rem] leading-relaxed text-ink sm:text-[1.1875rem]" aria-live="polite">
-                {ai.state === "speaking" ? ai.caption : <span className="text-ink-2">{ai.state === "thinking" ? "…" : "Take your time. Answer out loud."}</span>}
-              </p>
-            </section>
+            <AiInterviewer interviewId={id} active={connected} />
           ) : (
             <VideoTile
               name={partner.name}
