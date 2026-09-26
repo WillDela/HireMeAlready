@@ -3,6 +3,7 @@ import type { InterviewRole as Role } from "@/generated/prisma/client";
 import { type JoinQueueInput, type MatchPartner, ParsedResume, type QueueState, peerIdFor } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { generateQuestions } from "@/lib/gemini";
+import { closeInvite, inviteExpired } from "@/lib/invitations";
 import { initialsFor, questionSource } from "@/lib/views";
 
 // Live matching. Everyone in line polls GET /api/queue every ~2s; each poll is a
@@ -120,11 +121,24 @@ export async function queueState(userId: string): Promise<QueueState> {
 export async function partnerStillThere(interviewId: string, userId: string) {
   const interview = await db.interview.findUnique({
     where: { id: interviewId },
-    include: { participants: { include: { user: { include: { queueEntry: true } } } } },
+    include: {
+      participants: { include: { user: { include: { queueEntry: true } } } },
+      invitations: true,
+    },
   });
   if (!interview) return false;
   if (interview.status === "ABANDONED") return false;
   if (interview.status !== "PENDING") return true;
+
+  // Invited interviews skip the queue, so there's no heartbeat to go by: the other
+  // person may take a while to see the invite. Wait while it's open.
+  const invite = interview.invitations[0];
+  if (invite) {
+    const open = (invite.status === "PENDING" || invite.status === "ACCEPTED") && !inviteExpired(invite);
+    if (open) return true;
+    await closeInvite(invite, invite.status === "DECLINED" ? "DECLINED" : "EXPIRED");
+    return false;
+  }
 
   const partnerEntry = interview.participants.find((p) => p.userId !== userId)?.user.queueEntry;
   const here =

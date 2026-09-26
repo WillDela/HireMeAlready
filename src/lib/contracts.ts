@@ -318,6 +318,37 @@ export type PersonSearchResult = PersonSummary & {
   status: "none" | "incoming" | "outgoing" | "friends";
 };
 
+// ---------- Interview invites ----------
+
+// POST /api/invitations: invite a friend into a peer interview. `role` is the side
+// you'll play; jobTitle and company describe what the interviewee is practicing for.
+export const SendInviteInput = z.object({
+  userId: z.string().min(1),
+  role: InterviewRole,
+  jobTitle: z.string().trim().max(120).optional(),
+  company: z.string().trim().max(120).optional(),
+});
+export type SendInviteInput = z.infer<typeof SendInviteInput>;
+
+// PATCH /api/invitations/:id: the invitee answers.
+export const RespondInviteInput = z.object({ status: z.enum(["ACCEPTED", "DECLINED"]) });
+export type RespondInviteInput = z.infer<typeof RespondInviteInput>;
+
+// An open invite: not yet answered, or accepted with the call not started yet.
+export type InviteView = {
+  id: string;
+  interviewId: string; // the lobby is /call/:interviewId/lobby once ACCEPTED
+  person: PersonSummary; // the other side of the invite
+  yourRole: InterviewRole;
+  jobTitle: string | null;
+  company: string | null;
+  status: "PENDING" | "ACCEPTED";
+  sentAt: string;
+};
+
+// GET /api/invitations; every invitations route returns this.
+export type InvitationsResponse = { incoming: InviteView[]; outgoing: InviteView[] };
+
 // ---------- Notifications ----------
 
 // PATCH /api/notifications: one notification, or all of yours when `id` is omitted.

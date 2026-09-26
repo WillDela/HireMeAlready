@@ -1,78 +1,11 @@
 "use client";
 
 import { ArrowRightLeft, Check } from "lucide-react";
-import { interviewInvites } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { FriendInvites } from "@/components/FriendInvites";
 import { PracticeFolder } from "@/components/PracticeFolder";
-import { Avatar } from "@/components/ui/Avatar";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { EmptyFolder, ErrorReturned, LoadingSheets, StateView } from "@/components/ui/States";
-
-function Invites() {
-  const [role] = useRole();
-  const { status, data, retry } = useMockResource(interviewInvites, { isEmpty: (d) => d.length === 0 });
-  const mine = data.filter((i) => i.yourRole === role);
-
-  return (
-    <section aria-labelledby="inv-heading" className="mt-14">
-      <h2 id="inv-heading" className="text-[1.375rem] font-extrabold tracking-[-0.01em]">
-        Invitations from friends
-      </h2>
-      <p className="mt-1 text-[0.9375rem] text-manila-ink">
-        Showing invites where you&apos;d be the {role}. Switch role in the top bar to see the others.
-      </p>
-      <div className="mt-5">
-        <StateView
-          status={status === "ready" && mine.length === 0 ? "empty" : status}
-          loading={<LoadingSheets label="Checking for invitations…" rows={2} />}
-          error={
-            <ErrorReturned compact title="Invitations didn't load" onRetry={retry}>
-              Your friends&apos; invites are still waiting; we just couldn&apos;t fetch them.
-            </ErrorReturned>
-          }
-          empty={
-            <div className="sheet">
-              <EmptyFolder compact title="No invitations right now" action={<ButtonLink href="/friends" variant="secondary" size="sm">Invite a friend</ButtonLink>}>
-                When a friend invites you to a practice interview, it shows up here.
-              </EmptyFolder>
-            </div>
-          }
-        >
-          <ul className="sheet divide-y divide-edge">
-            {mine.map((inv) => (
-              <li key={inv.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
-                <div className="flex flex-1 items-center gap-3.5">
-                  <Avatar name={inv.from.name} initials={inv.from.initials} size={44} />
-                  <div className="min-w-0">
-                    <p className="font-bold">
-                      {inv.from.name}{" "}
-                      <span className="font-normal text-ink-2">
-                        wants you to {inv.yourRole === "interviewer" ? "interview them" : "be interviewed"}
-                      </span>
-                    </p>
-                    <p className="text-[0.875rem] text-ink-2">
-                      {inv.jobTitle} · {inv.company} · {inv.sent}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2 pl-[3.625rem] sm:pl-0">
-                  <ButtonLink href="/call/live-halcyon/lobby" size="sm">
-                    Accept and go to lobby
-                  </ButtonLink>
-                  <Button variant="ghost" size="sm" aria-label={`Decline invitation from ${inv.from.name}`}>
-                    Decline
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </StateView>
-      </div>
-    </section>
-  );
-}
 
 export default function PracticePage() {
   const [role, setRole] = useRole();
@@ -169,7 +102,7 @@ export default function PracticePage() {
           </div>
         </>
       )}
-      <Invites />
+      <FriendInvites />
     </>
   );
 }
