@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { reports as initialReports, reportStatusLabel, type Report, type ReportStatus } from "@/lib/mock";
-import { useMockResource } from "@/lib/mock-state";
+import type { AdminReportItem, ReportStatus as ApiReportStatus } from "@/lib/contracts";
+import { reportStatusLabel, type Report, type ReportStatus } from "@/lib/mock";
+import { apiFetch, useApiResource } from "@/lib/use-api";
+import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -17,6 +20,23 @@ const statusTone: Record<ReportStatus, string> = {
   actioned: "text-ink font-extrabold",
   dismissed: "text-ink-3",
 };
+
+function fromApi(item: AdminReportItem): Report {
+  return {
+    id: item.id,
+    reporter: item.reporterName,
+    reported: item.reportedName,
+    reason: item.reason,
+    details: item.details ?? "No further details.",
+    date: new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    callId: item.interviewId,
+    status: item.status.toLowerCase() as ReportStatus,
+  };
+}
+
+function toApiStatus(status: ReportStatus): ApiReportStatus {
+  return status.toUpperCase() as ApiReportStatus;
+}
 
 function StatusTag({ status }: { status: ReportStatus }) {
   return <span className={cn("tag", statusTone[status])}>{reportStatusLabel[status]}</span>;
@@ -39,15 +59,31 @@ function Actions({ report, onReview, onDismiss }: { report: Report; onReview: ()
 }
 
 export default function AdminReportsPage() {
-  const [items, setItems] = useState(initialReports);
+  const router = useRouter();
+  const currentUser = useCurrentUser();
   const [filter, setFilter] = useState<Filter>("active");
-  const [open, setOpen] = useState<Report | null>(null);
-  const { status, retry } = useMockResource(items, { isEmpty: (d) => d.length === 0 });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const { status, data, mutate, retry } = useApiResource<AdminReportItem[]>("/api/admin/reports", {
+    isEmpty: (d) => d.length === 0,
+  });
 
-  const set = (id: string, s: ReportStatus) => {
-    setItems((all) => all.map((r) => (r.id === id ? { ...r, status: s } : r)));
-    setOpen((o) => (o && o.id === id ? { ...o, status: s } : o));
-  };
+  useEffect(() => {
+    if (!currentUser.isAdmin) router.replace("/dashboard");
+  }, [currentUser.isAdmin, router]);
+
+  const items = useMemo(() => (data ?? []).map(fromApi), [data]);
+  const open = items.find((r) => r.id === openId) ?? null;
+
+  async function set(id: string, s: ReportStatus) {
+    try {
+      await apiFetch(`/api/admin/reports/${id}`, { method: "PATCH", body: JSON.stringify({ status: toApiStatus(s) }) });
+      mutate((data ?? []).map((r) => (r.id === id ? { ...r, status: toApiStatus(s) } : r)));
+    } catch {
+      // Left as-is; the row's buttons stay available to retry.
+    }
+  }
+
+  if (!currentUser.isAdmin) return null;
 
   const shown = items.filter((r) =>
     filter === "all" ? true : filter === "active" ? r.status === "open" || r.status === "in_review" : r.status === "actioned" || r.status === "dismissed",
@@ -138,7 +174,7 @@ export default function AdminReportsPage() {
                         <StatusTag status={r.status} />
                       </td>
                       <td className="px-5 py-3.5">
-                        <Actions report={r} onReview={() => setOpen(r)} onDismiss={() => set(r.id, "dismissed")} />
+                        <Actions report={r} onReview={() => setOpenId(r.id)} onDismiss={() => set(r.id, "dismissed")} />
                       </td>
                     </tr>
                   ))}
@@ -157,7 +193,7 @@ export default function AdminReportsPage() {
                     {r.reporter} reported <span className="tnum">{r.reported}</span> · {r.date}
                   </p>
                   <div className="mt-3">
-                    <Actions report={r} onReview={() => setOpen(r)} onDismiss={() => set(r.id, "dismissed")} />
+                    <Actions report={r} onReview={() => setOpenId(r.id)} onDismiss={() => set(r.id, "dismissed")} />
                   </div>
                 </li>
               ))}
@@ -166,7 +202,7 @@ export default function AdminReportsPage() {
         )}
       </StateView>
 
-      <Dialog open={open !== null} onClose={() => setOpen(null)} title={open ? `Report ${open.id}` : "Report"}>
+      <Dialog open={open !== null} onClose={() => setOpenId(null)} title={open ? `Report ${open.id}` : "Report"}>
         {open ? (
           <div>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-[0.9375rem]">
