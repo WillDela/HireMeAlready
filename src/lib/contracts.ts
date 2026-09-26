@@ -97,7 +97,7 @@ export type AnalysisResult = z.infer<typeof AnalysisResult>;
 export const CreateInterviewInput = z.object({
   mode: InterviewMode,
   jobTitle: z.string().min(1),
-  company: z.string().optional(),
+  company: z.string().min(1),
   jobDescription: z.string().optional(),
   grounded: z.boolean().default(false), // use Google Search grounding for company-specific questions
 });
@@ -109,10 +109,13 @@ export const JoinQueueInput = z.object({
 });
 export type JoinQueueInput = z.infer<typeof JoinQueueInput>;
 
+// Matches the interviewer's feedback form: three 1-5 ratings plus free text.
+const Rating = z.number().int().min(1).max(5);
 export const FeedbackInput = z.object({
-  rating: z.number().int().min(1).max(5).optional(),
-  strengths: z.string().min(1),
-  improvements: z.string().min(1),
+  communication: Rating,
+  technical: Rating,
+  confidence: Rating,
+  comments: z.string().trim().min(1),
 });
 export type FeedbackInput = z.infer<typeof FeedbackInput>;
 
@@ -121,6 +124,38 @@ export const ReportInput = z.object({
   details: z.string().optional(),
 });
 export type ReportInput = z.infer<typeof ReportInput>;
+
+export const UpdateProfileInput = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    headline: z.string().trim().max(120),
+    preferredRole: InterviewRole,
+    recordingConsent: z.boolean(),
+    shareResume: z.boolean(),
+    discoverable: z.boolean(),
+  })
+  .partial();
+export type UpdateProfileInput = z.infer<typeof UpdateProfileInput>;
+
+export const RESUME_MAX_BYTES = 5 * 1024 * 1024;
+
+export const UploadUrlInput = z.object({
+  fileName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine((name) => name.toLowerCase().endsWith(".pdf"), "Resumes need to be a PDF."),
+  size: z.number().int().positive().max(RESUME_MAX_BYTES, "Resumes need to be under 5 MB."),
+});
+export type UploadUrlInput = z.infer<typeof UploadUrlInput>;
+
+export const ConfirmResumeInput = z.object({ resumeId: z.string().min(1) });
+export type ConfirmResumeInput = z.infer<typeof ConfirmResumeInput>;
+
+// The parts of a parsed resume the user can correct on /resume and in onboarding.
+export const ResumeEditInput = ParsedResume.pick({ summary: true, skills: true, experience: true });
+export type ResumeEditInput = z.infer<typeof ResumeEditInput>;
 
 // ---------- API responses ----------
 
@@ -141,7 +176,7 @@ export type QueueState =
 export type IceServersResponse = { iceServers: RTCIceServer[]; ttl: number };
 
 // POST /api/resume/upload-url
-export type UploadUrlResponse = { uploadUrl: string; storageKey: string };
+export type UploadUrlResponse = { uploadUrl: string; storageKey: string; resumeId: string };
 
 // POST /api/ai/signed-url
 export type AiSessionResponse = {
