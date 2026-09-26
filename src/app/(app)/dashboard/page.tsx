@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
+import type { FriendsResponse } from "@/lib/contracts";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
-import { friendRequests, getInterview, lastInterview } from "@/lib/mock";
+import { getInterview, lastInterview } from "@/lib/mock";
 import { useMockResource } from "@/lib/mock-state";
+import { apiFetch, useApiResource } from "@/lib/use-api";
 import { FriendRow } from "@/components/FriendRow";
 import { TypeTag } from "@/components/InterviewTable";
 import { PracticeFolder } from "@/components/PracticeFolder";
@@ -49,10 +51,25 @@ function LastScore() {
   );
 }
 
-function Requests({ empty }: { empty: boolean }) {
-  const [pending, setPending] = useState(friendRequests.filter((r) => r.direction === "incoming"));
+function Requests() {
+  const { status, data, mutate } = useApiResource<FriendsResponse>("/api/friends");
   const [handled, setHandled] = useState<Record<string, "accepted" | "declined">>({});
-  const list = empty ? [] : pending;
+  const list = data?.incoming ?? [];
+
+  if (status === "loading" || status === "error") return null;
+
+  async function respond(requestId: string, decision: "ACCEPTED" | "DECLINED") {
+    setHandled((h) => ({ ...h, [requestId]: decision === "ACCEPTED" ? "accepted" : "declined" }));
+    try {
+      const next = await apiFetch<FriendsResponse>(`/api/friends/${requestId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: decision }),
+      });
+      window.setTimeout(() => mutate(next), decision === "DECLINED" ? 0 : 1600);
+    } catch {
+      setHandled((h) => Object.fromEntries(Object.entries(h).filter(([id]) => id !== requestId)));
+    }
+  }
 
   return (
     <section aria-labelledby="req-heading" className="sheet relative">
@@ -74,30 +91,23 @@ function Requests({ empty }: { empty: boolean }) {
         <ul className="divide-y divide-edge">
           {list.map((r) => (
             <FriendRow
-              key={r.id}
+              key={r.requestId}
               person={r}
-              meta={r.mutual ? `${r.mutual} mutual ${r.mutual === 1 ? "friend" : "friends"}` : `Sent ${r.sent}`}
+              meta={`Sent ${new Date(r.sentAt).toLocaleDateString()}`}
               actions={
-                handled[r.id] ? (
+                handled[r.requestId] ? (
                   <p className="text-[0.875rem] font-semibold text-ink-2" role="status">
-                    {handled[r.id] === "accepted" ? "Added to friends" : "Declined"}
+                    {handled[r.requestId] === "accepted" ? "Added to friends" : "Declined"}
                   </p>
                 ) : (
                   <>
-                    <Button
-                      size="sm"
-                      onClick={() => setHandled((h) => ({ ...h, [r.id]: "accepted" }))}
-                      aria-label={`Accept ${r.name}`}
-                    >
+                    <Button size="sm" onClick={() => respond(r.requestId, "ACCEPTED")} aria-label={`Accept ${r.name}`}>
                       Accept
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => {
-                        setHandled((h) => ({ ...h, [r.id]: "declined" }));
-                        window.setTimeout(() => setPending((p) => p.filter((x) => x.id !== r.id)), 1600);
-                      }}
+                      onClick={() => respond(r.requestId, "DECLINED")}
                       aria-label={`Decline ${r.name}`}
                     >
                       Decline
@@ -176,11 +186,9 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {status === "loading" || status === "error" ? null : (
-          <div className="lg:col-span-3">
-            <Requests empty={status === "empty"} />
-          </div>
-        )}
+        <div className="lg:col-span-3">
+          <Requests />
+        </div>
       </div>
     </>
   );

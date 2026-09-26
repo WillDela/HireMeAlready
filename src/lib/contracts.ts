@@ -260,7 +260,7 @@ export type PersonSummary = { id: string; name: string; initials: string; headli
 
 // GET /api/friends
 export type FriendsResponse = {
-  friends: (PersonSummary & { sharedInterviews: number })[];
+  friends: (PersonSummary & { friendshipId: string; sharedInterviews: number })[];
   incoming: (PersonSummary & { requestId: string; sentAt: string })[];
   outgoing: (PersonSummary & { requestId: string; sentAt: string })[];
 };
