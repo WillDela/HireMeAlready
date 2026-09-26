@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Interview Practice (ShellHacks)
 
-## Getting Started
+Mock interviews with an AI interviewer (ElevenLabs voice + Gemini) or a real person over WebRTC, with AI-generated questions and post-interview analysis.
 
-First, run the development server:
+The full plan (scope, schema, workstreams, cut list, phases) is in [`docs/PLAN.md`](docs/PLAN.md).
+
+## Stack
+
+Next.js 16 (App Router, TypeScript) · Tailwind 4 + shadcn/ui · Better Auth · Prisma 7 → Tiger Cloud Postgres + pgvector · DigitalOcean Spaces · Gemini · ElevenLabs Agents · PeerJS + coturn · Docker Compose + Caddy on a DigitalOcean droplet
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install               # also runs `prisma generate`
+cp .env.example .env      # fill in values; BETTER_AUTH_SECRET: openssl rand -hex 32
+npm run db:deploy         # apply migrations to the database in DATABASE_URL
+npm run dev               # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Database scripts:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script | What it does |
+|---|---|
+| `npm run db:migrate` | Create + apply a new migration after editing `prisma/schema.prisma` (Stream B only) |
+| `npm run db:deploy` | Apply existing migrations (everyone, and production) |
+| `npm run db:vector-index` | Create the HNSW index on `resume.embedding` (optional, re-runnable) |
+| `npm run db:studio` | Browse data |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The Prisma client is generated into `src/generated/prisma` (gitignored). Import the shared instance from `@/lib/db`.
 
-## Learn More
+## Workstreams and file ownership
 
-To learn more about Next.js, take a look at the following resources:
+Only the owning stream edits these paths; ask in team chat for changes elsewhere.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Stream | Owns |
+|---|---|
+| **A — Infra & Realtime** | `docker-compose.yml`, `Caddyfile`, `coturn/`, `Dockerfile`, `src/lib/rtc/`, `src/app/api/turn-credentials/`, `src/app/(app)/interview/[id]/peer/`, `src/components/call/` |
+| **B — Data, Auth, Matching** (William) | `prisma/`, `src/lib/{db,auth,auth-client,session,api,storage,vector,contracts,matching}.ts`, `src/app/api/{auth,profile,resume,queue,interviews,friends,messages,invitations}/` |
+| **C — AI** | `src/lib/gemini/`, `src/lib/elevenlabs.ts`, `src/lib/pipeline/`, `src/app/api/ai/`, `src/app/(app)/interview/[id]/ai/` |
+| **D — Product UX** | `src/components/ui/`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/(auth)/`, `src/app/(app)/{dashboard,profile,lobby,history,friends}/`, `src/components/{history,lobby,profile}/` |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Shared interfaces live in `src/lib/contracts.ts` (zod schemas + types). `src/lib/gemini/index.ts` currently returns fixtures with the final signatures, so UI and API work doesn't wait on Gemini.
 
-## Deploy on Vercel
+## Conventions
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Route Handlers wrap their body in `handleRoute` (`src/lib/api.ts`) and call `requireUser()` (`src/lib/session.ts`) for auth. Errors come back as `{ error: string }`.
+- Validate request bodies with the zod schemas from `contracts.ts`.
+- `resume.embedding` is a pgvector column Prisma can't read or write; use `src/lib/vector.ts`.
+- Work on feature branches and open PRs into `main`.
