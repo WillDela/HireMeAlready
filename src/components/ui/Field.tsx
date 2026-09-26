@@ -101,7 +101,7 @@ export function SelectField({
   placeholder,
   id: idProp,
   ...select
-}: Common & ComponentProps<"select"> & { options: string[]; placeholder?: string }) {
+}: Common & ComponentProps<"select"> & { options: (string | { value: string; label: string })[]; placeholder?: string }) {
   const auto = useId();
   const id = idProp ?? auto;
   return (
@@ -121,11 +121,14 @@ export function SelectField({
             {placeholder}
           </option>
         ) : null}
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
+        {options.map((o) => {
+          const { value, label: text } = typeof o === "string" ? { value: o, label: o } : o;
+          return (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          );
+        })}
       </select>
       <Meta id={id} hint={hint} error={error} />
     </div>

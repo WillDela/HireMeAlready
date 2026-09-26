@@ -360,8 +360,6 @@ export default function LivePracticePage() {
             </Button>
           </div>
           <DeviceCheck
-            permission="granted"
-            onRetry={() => undefined}
             joining={joining}
             onJoin={() => {
               setJoining(true);

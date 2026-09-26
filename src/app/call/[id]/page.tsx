@@ -7,6 +7,7 @@ import { aiCaptions, callSessions, candidateResume, suggestedQuestions } from "@
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { useDevicePrefs } from "@/lib/rtc/device-prefs";
 import { AiOrb, type AiState } from "@/components/call/AiOrb";
 import { CallControls } from "@/components/call/CallControls";
 import { InterviewerSidePanel } from "@/components/call/InterviewerSidePanel";
@@ -61,8 +62,12 @@ function MockCallPage({ id }: { id: string }) {
   const currentUser = useCurrentUser();
   const forced = useForcedState();
   const [role] = useRole();
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(true);
+  // Start muted / camera off if that's how you left the lobby.
+  const devicePrefs = useDevicePrefs();
+  const [micToggle, setMicOn] = useState<boolean | null>(null);
+  const [cameraToggle, setCameraOn] = useState<boolean | null>(null);
+  const micOn = micToggle ?? devicePrefs.micOn;
+  const cameraOn = cameraToggle ?? devicePrefs.cameraOn;
   const [panelOpen, setPanelOpen] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
@@ -186,8 +191,8 @@ function MockCallPage({ id }: { id: string }) {
         <CallControls
           micOn={micOn}
           cameraOn={cameraOn}
-          onToggleMic={() => setMicOn((v) => !v)}
-          onToggleCamera={() => setCameraOn((v) => !v)}
+          onToggleMic={() => setMicOn(!micOn)}
+          onToggleCamera={() => setCameraOn(!cameraOn)}
           onReport={() => setReportOpen(true)}
           onEnd={() => setEndOpen(true)}
           endLabel={isAi ? "End" : "Leave"}
