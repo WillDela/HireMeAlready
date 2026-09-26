@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
 export class UnauthorizedError extends Error {
@@ -17,5 +18,12 @@ export async function getUser() {
 export async function requireUser() {
   const user = await getUser();
   if (!user) throw new UnauthorizedError();
+  return user;
+}
+
+/** Current signed-in user for pages and layouts; redirects to /login otherwise. */
+export async function requirePageUser() {
+  const user = await getUser();
+  if (!user) redirect("/login");
   return user;
 }

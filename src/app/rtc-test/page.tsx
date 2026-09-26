@@ -11,7 +11,7 @@ export default async function RtcTestPage({ searchParams }: PageProps<"/rtc-test
     redirect(`/rtc-test?room=${newRoomCode()}`);
   }
   if (!(await getUser())) {
-    redirect(`/sign-in?next=${encodeURIComponent(`/rtc-test?room=${room}`)}`);
+    redirect(`/login?next=${encodeURIComponent(`/rtc-test?room=${room}`)}`);
   }
   return <RtcTest initialRoom={room} />;
 }

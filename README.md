@@ -6,7 +6,7 @@ The full plan (scope, schema, workstreams, cut list, phases) is in [`docs/PLAN.m
 
 ## Stack
 
-Next.js 16 (App Router, TypeScript) · Tailwind 4 + shadcn/ui · Better Auth · Prisma 7 → Tiger Cloud Postgres + pgvector · DigitalOcean Spaces · Gemini · ElevenLabs Agents · PeerJS + coturn · Docker Compose + Caddy on a DigitalOcean droplet
+Next.js 16 (App Router, TypeScript) · Tailwind 4 (own design system, see `DESIGN.md`) · Better Auth · Prisma 7 → Tiger Cloud Postgres + pgvector · DigitalOcean Spaces · Gemini · ElevenLabs Agents · PeerJS + coturn · Docker Compose + Caddy on a DigitalOcean droplet
 
 ## Setup
 
@@ -34,12 +34,18 @@ Only the owning stream edits these paths; ask in team chat for changes elsewhere
 
 | Stream | Owns |
 |---|---|
-| **A — Infra & Realtime** | `docker-compose.yml`, `Caddyfile`, `coturn/`, `Dockerfile`, `src/lib/rtc/`, `src/app/api/turn-credentials/`, `src/app/(app)/interview/[id]/peer/`, `src/components/call/` |
-| **B — Data, Auth, Matching** (William) | `prisma/`, `src/lib/{db,auth,auth-client,session,api,storage,vector,contracts,matching}.ts`, `src/app/api/{auth,profile,resume,queue,interviews,friends,messages,invitations}/` |
-| **C — AI** | `src/lib/gemini/`, `src/lib/elevenlabs/`, `scripts/sync-agent.mts`, `src/lib/pipeline/`, `src/app/api/ai/`, `src/app/(app)/interview/[id]/ai/` |
-| **D — Product UX** | `src/components/ui/`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/(auth)/`, `src/app/(app)/{dashboard,profile,lobby,history,friends}/`, `src/components/{history,lobby,profile}/` |
+| **A — Infra & Realtime** | `docker-compose.yml`, `Caddyfile`, `coturn/`, `Dockerfile`, `src/lib/rtc/`, `src/app/api/turn-credentials/`, `src/app/call/` (live call, lobby, wrap-up), `src/app/rtc-test/`, `src/components/call/` |
+| **B — Data, Auth, Matching** (William) | `prisma/`, `src/proxy.ts`, `src/lib/{db,auth,auth-client,session,api,storage,vector,contracts,matching}.ts`, `src/app/api/{auth,profile,resume,queue,interviews,friends,messages,invitations}/` |
+| **C — AI** | `src/lib/gemini/`, `src/lib/elevenlabs/`, `scripts/sync-agent.mts`, `src/lib/pipeline/`, `src/app/api/ai/`, `src/app/(app)/practice/ai/` |
+| **D — Product UX** | `DESIGN.md`, `PRODUCT.md`, `src/app/{layout.tsx,page.tsx,globals.css,not-found.tsx}`, `src/app/(auth)/`, `src/app/onboarding/`, `src/app/(app)/` (except `practice/ai/`), `src/components/{ui,shell}/`, `src/components/*.tsx`, `src/lib/{cn,mock,mock-state,prefs,theme-script}.ts` |
 
 Shared interfaces live in `src/lib/contracts.ts` (zod schemas + types). `src/lib/gemini/index.ts` currently returns fixtures with the final signatures, so UI and API work doesn't wait on Gemini.
+
+## UI and mock data
+
+The UI came from the [hire-me-already](https://github.com/alejandro0955/hire-me-already) mockup. Sign in, sign up, sign out, route protection and the signed-in user's name, email and initials are real (Better Auth). Everything else still reads from `src/lib/mock.ts` through `useMockResource()` (`src/lib/mock-state.ts`) until its API route exists. That includes the dashboard, practice setup, the AI and live call screens, history, resume, friends, settings, notifications and admin reports. To move a screen over, fetch from its `/api/...` route and map the `contracts.ts` types onto the shapes the screen already uses. `?state=loading|empty|error` (or the State preview button) forces each screen's loading, empty and error states for review.
+
+Client components get the signed-in user from `useCurrentUser()` (`src/components/shell/CurrentUserProvider.tsx`). The `(app)`, `call` and `onboarding` layouts provide it after `requirePageUser()` checks the session.
 
 ## Conventions
 
