@@ -244,6 +244,24 @@ export type PeerSession = {
 export const PeerEventInput = z.object({ event: z.enum(["connected", "left"]) });
 export type PeerEventInput = z.infer<typeof PeerEventInput>;
 
+// Containers a peer call's own-mic recording can come in: Chrome records WebM, Firefox
+// Ogg, Safari MP4. Codec parameters are dropped.
+export const RecordingMimeType = z.enum(["audio/webm", "audio/ogg", "audio/mp4"]);
+export type RecordingMimeType = z.infer<typeof RecordingMimeType>;
+
+// POST /api/interviews/:id/recordings/upload-url. `startedAgoMs` is how long ago the
+// recording started, measured on the client, so the server can place it on its own clock
+// (a timestamp would carry the client's clock skew into the merged transcript).
+export const RecordingUploadInput = z.object({
+  mimeType: RecordingMimeType,
+  startedAgoMs: z.number().int().nonnegative().max(4 * 60 * 60 * 1000),
+});
+export type RecordingUploadInput = z.infer<typeof RecordingUploadInput>;
+
+// POST /api/interviews/:id/recordings: the recording finished uploading.
+export const ConfirmRecordingInput = z.object({ recordingId: z.string().min(1) });
+export type ConfirmRecordingInput = z.infer<typeof ConfirmRecordingInput>;
+
 // GET /api/interviews/:id/feedback, the wrap-up page after a peer interview. POST takes
 // a FeedbackInput (interviewer only) and returns this again.
 export type PeerWrapUp = {
@@ -261,6 +279,10 @@ export type IceServersResponse = { iceServers: RTCIceServer[]; ttl: number };
 
 // POST /api/resume/upload-url
 export type UploadUrlResponse = { uploadUrl: string; storageKey: string; resumeId: string };
+
+// POST /api/interviews/:id/recordings/upload-url. PUT the audio with the same Content-Type
+// as the requested mimeType, then confirm with the recordingId.
+export type RecordingUploadResponse = { uploadUrl: string; recordingId: string };
 
 // POST /api/ai/questions
 export type QuestionSetResponse = { questions: GeneratedQuestion[] };
