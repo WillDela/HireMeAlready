@@ -24,6 +24,17 @@ export async function tryMatch(userId: string, role: InterviewRole): Promise<Mat
   const staleBefore = new Date(Date.now() - STALE_MS);
 
   return db.$transaction(async (tx) => {
+    // Lock our own entry first. If it's locked, someone else is matching us right now
+    // (our next poll will see MATCHED); if it's no longer WAITING, we're already matched.
+    // Locking self before partner also keeps two users matching each other from
+    // deadlocking.
+    const [self] = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "queue_entry"
+      WHERE "userId" = ${userId} AND "status" = 'WAITING'
+      FOR UPDATE SKIP LOCKED
+    `;
+    if (!self) return null;
+
     const [partner] = await tx.$queryRaw<{ id: string; userId: string }[]>`
       SELECT "id", "userId" FROM "queue_entry"
       WHERE "status" = 'WAITING'
