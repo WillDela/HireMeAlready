@@ -2,6 +2,8 @@ import type { GeneratedQuestion, TranscriptLine } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { getConversation } from "@/lib/elevenlabs";
 import { analyzeInterview, transcribeAudio } from "@/lib/gemini";
+import { outOf5 } from "@/lib/history";
+import { notify } from "@/lib/notifications";
 import { getObjectBuffer } from "@/lib/storage";
 
 // Owner: Stream C. Runs after an interview ends (called from POST /api/interviews/:id/end
@@ -149,6 +151,12 @@ async function runAnalysis(interview: InterviewForFinalize, transcript: Transcri
     await db.analysis.update({
       where: { interviewId: interview.id },
       data: { status: "READY", result, model: process.env.GEMINI_MODEL || null, error: null },
+    });
+    await notify(interviewee.userId, {
+      kind: "RESULTS_READY",
+      title: "Your results are filed",
+      body: `${interview.company || interview.jobTitle || "Your interview"} · scored ${outOf5(result.overallScore)} of 5.`,
+      href: `/history/${interview.id}`,
     });
   } catch (err) {
     console.error(`Interview ${interview.id} failed to analyze`, err);

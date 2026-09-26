@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { reportReasons } from "@/lib/mock";
+import { apiFetch } from "@/lib/use-api";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { SelectField, TextAreaField } from "@/components/ui/Field";
@@ -14,23 +15,28 @@ export function ReportDialog({
   onClose,
   subject,
   onLeave,
+  interviewId,
 }: {
   open: boolean;
   onClose: () => void;
   /** Who or what is being reported, e.g. the partner's name or "the AI interviewer". */
   subject: string;
   onLeave?: () => void;
+  /** Files a real report against this interview. Without it (mock calls), sending is simulated. */
+  interviewId?: string;
 }) {
   const [reason, setReason] = useState("");
   const [details, setDetails] = useState("");
   const [touched, setTouched] = useState(false);
   const [phase, setPhase] = useState<"form" | "sending" | "sent">("form");
+  const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setReason("");
     setDetails("");
     setTouched(false);
     setPhase("form");
+    setError(null);
   }
 
   function close() {
@@ -39,12 +45,26 @@ export function ReportDialog({
     window.setTimeout(reset, 200);
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setTouched(true);
     if (!reason) return;
     setPhase("sending");
-    window.setTimeout(() => setPhase("sent"), 900);
+    setError(null);
+    if (!interviewId) {
+      window.setTimeout(() => setPhase("sent"), 900);
+      return;
+    }
+    try {
+      await apiFetch(`/api/interviews/${interviewId}/report`, {
+        method: "POST",
+        body: JSON.stringify({ reason, details: details.trim() || undefined }),
+      });
+      setPhase("sent");
+    } catch {
+      setError("We couldn't send your report. Check your connection and try again.");
+      setPhase("form");
+    }
   }
 
   return (
@@ -91,12 +111,17 @@ export function ReportDialog({
             onChange={(e) => setDetails(e.target.value)}
             hint={`${details.length} / ${MAX} characters`}
           />
+          {error ? (
+            <p role="alert" className="text-[0.875rem] font-semibold text-stamp">
+              {error}
+            </p>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-3 pt-1">
             <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
             <Button type="submit" variant="danger" loading={phase === "sending"} loadingLabel="Sending…">
-              Send report
+              {error ? "Try again" : "Send report"}
             </Button>
           </div>
         </form>

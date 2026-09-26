@@ -240,6 +240,7 @@ function CallRoom({ id, session, live }: { id: string; session: CallSession; liv
         onClose={() => setReportOpen(false)}
         subject={isAi ? "a problem with this interview" : partner.name}
         onLeave={end}
+        interviewId={live ? id : undefined}
       />
 
       <Dialog

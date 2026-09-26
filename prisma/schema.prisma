@@ -42,6 +42,7 @@ model User {
   messagesIn     Message[]     @relation("Recipient")
   invitesOut     Invitation[]  @relation("Inviter")
   invitesIn      Invitation[]  @relation("Invitee")
+  notifications  Notification[]
 
   @@unique([email])
   @@map("user")
@@ -146,6 +147,15 @@ enum InviteStatus {
   ACCEPTED
   DECLINED
   EXPIRED
+}
+
+enum NotificationKind {
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  RESULTS_READY
+  FEEDBACK_RECEIVED
+  RESUME_PARSED
+  REPORT_REVIEWED
 }
 
 enum ReportStatus {
@@ -325,14 +335,32 @@ model Report {
   interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   reporterId  String
   reporter    User      @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
-  reportedId  String
-  reported    User      @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
+  reportedId  String? // null for AI interviews: there's no person to report
+  reported    User?     @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
   reason      String
   details     String?
   status      ReportStatus @default(OPEN)
   createdAt   DateTime  @default(now())
 
   @@map("report")
+}
+
+// ---------- Notifications ----------
+
+// The top bar's bell, polled every 30s. Written by notify() in src/lib/notifications.ts.
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      NotificationKind
+  title     String // rendered when created, e.g. "Priya left you feedback"
+  body      String
+  href      String // where clicking it goes
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+  @@map("notification")
 }
 
 // ---------- Matching ----------

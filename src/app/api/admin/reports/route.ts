@@ -21,7 +21,7 @@ export function GET() {
     const body: AdminReportItem[] = reports.map((r) => ({
       id: r.id,
       reporterName: r.reporter.name,
-      reportedName: r.reported.name,
+      reportedName: r.reported?.name ?? "AI interview",
       reason: r.reason,
       details: r.details,
       createdAt: r.createdAt.toISOString(),

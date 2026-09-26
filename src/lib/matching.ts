@@ -14,8 +14,14 @@ import { initialsFor, questionSource } from "@/lib/views";
 
 /** Waiting entries that haven't polled for this long are never matched. */
 const WAITING_STALE_SECONDS = 15;
-/** A matched partner that hasn't polled for this long has left; the match is abandoned. */
-const MATCHED_STALE_MS = 30_000;
+/**
+ * A matched partner that hasn't polled for this long has left; the match is abandoned.
+ * Generous on purpose: Chrome throttles timers in a hidden tab to about once a minute
+ * after 5 minutes, so someone who switched tabs in the lobby still polls, just slowly.
+ * Real departures are caught sooner by the live page's pagehide DELETE and the call
+ * page's Leave.
+ */
+const MATCHED_STALE_MS = 90_000;
 const SUGGESTED_QUESTIONS = 8;
 
 const opposite = (role: Role): Role => (role === "INTERVIEWER" ? "INTERVIEWEE" : "INTERVIEWER");

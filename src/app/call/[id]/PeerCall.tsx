@@ -265,7 +265,7 @@ function PeerRoom({ session }: { session: PeerSession }) {
         />
       </footer>
 
-      <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} subject={partner.name} onLeave={() => leave()} />
+      <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} subject={partner.name} onLeave={() => leave()} interviewId={interviewId} />
 
       <Dialog
         open={endOpen}

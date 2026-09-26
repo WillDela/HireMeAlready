@@ -2,6 +2,7 @@ import { handleRoute, HttpError } from "@/lib/api";
 import { RespondFriendRequestInput } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { getFriendsView } from "@/lib/friends";
+import { notify } from "@/lib/notifications";
 import { requireUser } from "@/lib/session";
 
 type Params = { params: Promise<{ id: string }> };
@@ -22,6 +23,12 @@ export function PATCH(request: Request, { params }: Params) {
       await db.friendship.delete({ where: { id } });
     } else {
       await db.friendship.update({ where: { id }, data: { status: "ACCEPTED" } });
+      await notify(friendship.requesterId, {
+        kind: "FRIEND_ACCEPTED",
+        title: `${user.name} accepted your friend request`,
+        body: `${user.name} is on your friends list now.`,
+        href: "/friends",
+      });
     }
     return getFriendsView(user.id);
   });
