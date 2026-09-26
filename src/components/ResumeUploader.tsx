@@ -1,23 +1,32 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type DragEvent } from "react";
+import { useId, useState, type DragEvent } from "react";
 import { FileText, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { RESUME_MAX_BYTES, type UploadUrlResponse } from "@/lib/contracts";
+import { apiFetch } from "@/lib/use-api";
+import { formatBytes, type ResumeView } from "@/lib/views";
 import { Button } from "@/components/ui/Button";
 import { Stamp } from "@/components/ui/Stamp";
 
-const ACCEPT = [".pdf", ".doc", ".docx"];
-const MAX_BYTES = 5 * 1024 * 1024;
-
 type Phase = { kind: "idle" } | { kind: "uploading"; name: string; progress: number } | { kind: "error"; message: string };
 
-function formatSize(bytes: number) {
-  return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+/** PUT straight to Spaces with the presigned URL. XHR rather than fetch, for upload progress. */
+function putFile(url: string, file: File, onProgress: (percent: number) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", "application/pdf"); // must match what the URL was signed with
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
+    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`)));
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.send(file);
+  });
 }
 
 /**
- * Drag-and-drop or pick a resume. Validation and upload are simulated;
- * `onUploaded` fires with the file's name and size once "parsed".
+ * Drag-and-drop or pick a PDF resume. Uploads it to storage, then tells the API it's
+ * there; `onUploaded` fires with the new resume, which is parsed in the background.
  */
 export function ResumeUploader({
   onUploaded,
@@ -25,7 +34,7 @@ export function ResumeUploader({
   forceError,
   className,
 }: {
-  onUploaded: (file: { name: string; size: string }) => void;
+  onUploaded: (resume: ResumeView) => void;
   onCancel?: () => void;
   forceError?: string | null;
   className?: string;
@@ -34,46 +43,35 @@ export function ResumeUploader({
   const hintId = useId();
   const [dragging, setDragging] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
-  const timer = useRef<number | null>(null);
-
-  const [done, setDone] = useState<{ name: string; size: string } | null>(null);
-
-  useEffect(() => () => {
-    if (timer.current) window.clearInterval(timer.current);
-  }, []);
-
-  const onUploadedRef = useRef(onUploaded);
-  useEffect(() => {
-    onUploadedRef.current = onUploaded;
-  }, [onUploaded]);
-
-  const finished = phase.kind === "uploading" && phase.progress >= 100;
-  useEffect(() => {
-    if (!finished || !done) return;
-    if (timer.current) window.clearInterval(timer.current);
-    const t = window.setTimeout(() => onUploadedRef.current(done), 450);
-    return () => window.clearTimeout(t);
-  }, [finished, done]);
 
   const shown: Phase = forceError ? { kind: "error", message: forceError } : phase;
 
-  function accept(file: File | undefined) {
+  async function accept(file: File | undefined) {
     if (!file) return;
-    const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-    if (!ACCEPT.includes(ext)) {
-      setPhase({ kind: "error", message: `${file.name} isn't a PDF or Word file. Export your resume as PDF and try again.` });
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setPhase({ kind: "error", message: `${file.name} isn't a PDF. Export your resume as PDF and try again.` });
       return;
     }
-    if (file.size > MAX_BYTES) {
-      setPhase({ kind: "error", message: `${file.name} is ${formatSize(file.size)}. Resumes need to be under 5 MB.` });
+    if (file.size > RESUME_MAX_BYTES) {
+      setPhase({ kind: "error", message: `${file.name} is ${formatBytes(file.size)}. Resumes need to be under 5 MB.` });
       return;
     }
-    setDone({ name: file.name, size: formatSize(file.size) });
     setPhase({ kind: "uploading", name: file.name, progress: 0 });
-    if (timer.current) window.clearInterval(timer.current);
-    timer.current = window.setInterval(() => {
-      setPhase((p) => (p.kind === "uploading" ? { ...p, progress: Math.min(100, p.progress + 12) } : p));
-    }, 140);
+    try {
+      const { uploadUrl, resumeId } = await apiFetch<UploadUrlResponse>("/api/resume/upload-url", {
+        method: "POST",
+        body: JSON.stringify({ fileName: file.name, size: file.size }),
+      });
+      await putFile(uploadUrl, file, (progress) => setPhase({ kind: "uploading", name: file.name, progress }));
+      setPhase({ kind: "uploading", name: file.name, progress: 100 });
+      onUploaded(await apiFetch<ResumeView>("/api/resume", { method: "POST", body: JSON.stringify({ resumeId }) }));
+      setPhase({ kind: "idle" });
+    } catch (err) {
+      setPhase({
+        kind: "error",
+        message: `${file.name} didn't upload${err instanceof Error ? ` (${err.message})` : ""}. Check your connection and try again.`,
+      });
+    }
   }
 
   function onDrop(e: DragEvent) {
@@ -118,7 +116,7 @@ export function ResumeUploader({
         <UploadCloud size={34} strokeWidth={1.75} aria-hidden="true" className="text-ink-2" />
         <p className="mt-3 text-[1.0625rem] font-bold">{dragging ? "Drop it here" : "Drag your resume here"}</p>
         <p id={hintId} className="mt-1 text-[0.875rem] text-ink-2">
-          PDF or Word, up to 5 MB
+          PDF, up to 5 MB
         </p>
         <label htmlFor={inputId} className="btn btn-secondary btn-sm mt-5 cursor-pointer">
           Choose a file
@@ -126,7 +124,7 @@ export function ResumeUploader({
         <input
           id={inputId}
           type="file"
-          accept={ACCEPT.join(",")}
+          accept=".pdf,application/pdf"
           aria-describedby={hintId}
           className="visually-hidden"
           onChange={(e) => accept(e.target.files?.[0])}

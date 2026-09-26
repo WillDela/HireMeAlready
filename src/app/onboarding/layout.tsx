@@ -1,7 +1,6 @@
 import { CurrentUserProvider } from "@/components/shell/CurrentUserProvider";
-import { requirePageUser } from "@/lib/session";
+import { requireViewer } from "@/lib/profile";
 
 export default async function SignedInLayout({ children }: { children: React.ReactNode }) {
-  const user = await requirePageUser();
-  return <CurrentUserProvider user={{ id: user.id, name: user.name, email: user.email }}>{children}</CurrentUserProvider>;
+  return <CurrentUserProvider viewer={await requireViewer()}>{children}</CurrentUserProvider>;
 }

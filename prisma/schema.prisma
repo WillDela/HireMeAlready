@@ -151,14 +151,19 @@ enum InviteStatus {
 // ---------- Profile & resume ----------
 
 model Profile {
-  userId         String        @id
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  preferredRole  InterviewRole @default(INTERVIEWEE)
-  headline       String?
-  targetRole     String?
-  linkedinUrl    String?
-  shareContact   Boolean       @default(true) // gates the contact card shown after an interview
-  activeResumeId String?       @unique
+  userId           String        @id
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredRole    InterviewRole @default(INTERVIEWEE)
+  headline         String?
+  targetRole       String?
+  linkedinUrl      String?
+  shareContact     Boolean       @default(true) // gates the contact card shown after an interview
+  activeResumeId   String?       @unique
+  // Settings > Privacy. Recording consent is also collected at sign up.
+  recordingConsent Boolean       @default(false)
+  shareResume      Boolean       @default(true) // matched interviewers see the parsed resume
+  discoverable     Boolean       @default(true) // shows up in Find people
+  isAdmin          Boolean       @default(false) // sees /admin/reports; set by hand
 
   @@map("profile")
 }
@@ -169,6 +174,7 @@ model Resume {
   user        User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   storageKey  String // DO Spaces object key
   fileName    String
+  sizeBytes   Int?
   parseStatus JobStatus                   @default(PENDING)
   parsed      Json? // ParsedResume in src/lib/contracts.ts
   // Prisma can't read/write vectors; use $queryRaw / $executeRaw (see src/lib/vector.ts).
@@ -231,6 +237,7 @@ model Question {
   order       Int
   text        String
   category    String // behavioral | technical | role-specific
+  source      String    @default("general") // company | job | general, as labeled in the UI
   rationale   String?
   sourceUrl   String? // from Google Search grounding
 
@@ -286,17 +293,19 @@ model Analysis {
 
 // Written by the human interviewer after a peer interview.
 model Feedback {
-  id           String    @id @default(cuid())
-  interviewId  String
-  interview    Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  authorId     String
-  author       User      @relation("FeedbackAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  subjectId    String
-  subject      User      @relation("FeedbackSubject", fields: [subjectId], references: [id], onDelete: Cascade)
-  rating       Int? // 1-5
-  strengths    String
-  improvements String
-  createdAt    DateTime  @default(now())
+  id            String    @id @default(cuid())
+  interviewId   String
+  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User      @relation("FeedbackAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subjectId     String
+  subject       User      @relation("FeedbackSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  // 1-5 each, matching the interviewer's feedback form
+  communication Int
+  technical     Int
+  confidence    Int
+  comments      String
+  createdAt     DateTime  @default(now())
 
   @@unique([interviewId, authorId])
   @@map("feedback")

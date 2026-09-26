@@ -46,3 +46,6 @@ next-env.d.ts
 # agent skill copies installed by prisma init (Claude Code copy lives in .claude/skills)
 /.agents/
 /.windsurf/
+
+# personal Claude Code settings
+/.claude/settings.local.json
