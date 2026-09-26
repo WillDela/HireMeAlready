@@ -3,6 +3,7 @@ import { AuthForm } from "@/components/AuthForm";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-export default function LoginPage() {
-  return <AuthForm mode="login" />;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
+  return <AuthForm mode="login" oauthError={error} />;
 }

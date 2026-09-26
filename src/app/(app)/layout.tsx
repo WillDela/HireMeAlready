@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/shell/AppShell";
 import { CurrentUserProvider } from "@/components/shell/CurrentUserProvider";
-import { requireViewer } from "@/lib/profile";
+import { requireOnboardedViewer } from "@/lib/profile";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <CurrentUserProvider viewer={await requireViewer()}>
+    <CurrentUserProvider viewer={await requireOnboardedViewer()}>
       <AppShell>{children}</AppShell>
     </CurrentUserProvider>
   );

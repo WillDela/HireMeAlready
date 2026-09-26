@@ -28,6 +28,16 @@ export type Speaker = z.infer<typeof Speaker>;
 export const ParsedResume = z.object({
   name: z.string().optional(),
   summary: z.string(),
+  // Profile suggestions shown for confirmation during onboarding.
+  headline: z
+    .string()
+    .optional()
+    .describe("One-line professional headline, e.g. 'CS student at FIU building web apps'"),
+  targetRole: z
+    .string()
+    .optional()
+    .describe("The job title this person is most likely applying for next"),
+  linkedinUrl: z.string().optional().describe("LinkedIn profile URL if the resume lists one"),
   skills: z.array(z.string()),
   experience: z.array(
     z.object({
@@ -129,6 +139,11 @@ export const UpdateProfileInput = z
   .object({
     name: z.string().trim().min(1).max(100),
     headline: z.string().trim().max(120),
+    targetRole: z.string().trim().max(120),
+    // "" clears it.
+    linkedinUrl: z
+      .union([z.literal(""), z.url({ protocol: /^https?$/, error: "Enter a full LinkedIn URL" })])
+      .transform((url) => url || null),
     preferredRole: InterviewRole,
     recordingConsent: z.boolean(),
     shareResume: z.boolean(),

@@ -44,3 +44,17 @@ export function parseJsonResponse<T>(schema: z.ZodType<T>, text: string | undefi
   }
   return schema.parse(json);
 }
+
+/** Retries Gemini's transient "busy" errors (429, 500, 503) with backoff. */
+export async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      const transient = status === 429 || status === 500 || status === 503;
+      if (!transient || attempt >= attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt)); // 2s, 4s, 8s
+    }
+  }
+}

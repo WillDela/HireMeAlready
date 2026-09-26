@@ -1,6 +1,10 @@
+import { redirect } from "next/navigation";
 import { CurrentUserProvider } from "@/components/shell/CurrentUserProvider";
 import { requireViewer } from "@/lib/profile";
 
+// Onboarding is mandatory (see requireOnboardedViewer) and happens once.
 export default async function SignedInLayout({ children }: { children: React.ReactNode }) {
-  return <CurrentUserProvider viewer={await requireViewer()}>{children}</CurrentUserProvider>;
+  const viewer = await requireViewer();
+  if (viewer.onboarded) redirect("/dashboard");
+  return <CurrentUserProvider viewer={viewer}>{children}</CurrentUserProvider>;
 }

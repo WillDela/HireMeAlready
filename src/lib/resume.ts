@@ -1,4 +1,4 @@
-import { ParsedResume } from "@/lib/contracts";
+import { ParsedResume, RESUME_MAX_BYTES } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { embedText, parseResume } from "@/lib/gemini";
 import { createDownloadUrl, getObjectBuffer } from "@/lib/storage";
@@ -23,7 +23,11 @@ export async function processResume(resumeId: string) {
   let parsed: ParsedResume;
   try {
     const resume = await db.resume.update({ where: { id: resumeId }, data: { parseStatus: "PROCESSING" } });
-    parsed = ParsedResume.parse(await parseResume(await getObjectBuffer(resume.storageKey)));
+    const pdf = await getObjectBuffer(resume.storageKey);
+    // The presigned PUT can't enforce the declared size or type, so check what arrived.
+    if (pdf.length > RESUME_MAX_BYTES) throw new Error(`Resume too large: ${pdf.length} bytes`);
+    if (pdf.subarray(0, 5).toString("latin1") !== "%PDF-") throw new Error("Not a PDF");
+    parsed = ParsedResume.parse(await parseResume(pdf));
     await db.resume.update({ where: { id: resumeId }, data: { parsed, parseStatus: "READY" } });
   } catch (err) {
     console.error(`Resume ${resumeId} failed to parse`, err);

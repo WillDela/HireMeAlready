@@ -1,7 +1,6 @@
 import { handleRoute } from "@/lib/api";
 import { UpdateProfileInput } from "@/lib/contracts";
-import { db } from "@/lib/db";
-import { getOrCreateProfile } from "@/lib/profile";
+import { getOrCreateProfile, updateProfile } from "@/lib/profile";
 import { requireUser } from "@/lib/session";
 import { toViewer } from "@/lib/views";
 
@@ -17,18 +16,6 @@ export function GET() {
 export function PATCH(request: Request) {
   return handleRoute(async () => {
     const user = await requireUser();
-    const { name, ...profileFields } = UpdateProfileInput.parse(await request.json());
-
-    const [updatedUser, profile] = await db.$transaction([
-      name !== undefined
-        ? db.user.update({ where: { id: user.id }, data: { name } })
-        : db.user.findUniqueOrThrow({ where: { id: user.id } }),
-      db.profile.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id, ...profileFields },
-        update: profileFields,
-      }),
-    ]);
-    return toViewer(updatedUser, profile);
+    return updateProfile(user.id, UpdateProfileInput.parse(await request.json()));
   });
 }

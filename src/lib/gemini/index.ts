@@ -1,32 +1,42 @@
 import { createPartFromBase64, createPartFromText, createUserContent } from "@google/genai";
 import { z } from "zod";
 import { AnalysisResult, GeneratedQuestion, ParsedResume, type TranscriptLine } from "@/lib/contracts";
-import { client, geminiEmbedModel, geminiModel, parseJsonResponse, toResponseSchema } from "@/lib/gemini/client";
+import { client, geminiEmbedModel, geminiModel, parseJsonResponse, toResponseSchema, withRetry } from "@/lib/gemini/client";
 
 // Owner: Stream C. Model names come from GEMINI_MODEL and GEMINI_EMBED_MODEL.
 
-const RESUME_PROMPT =
-  "Extract this resume into structured data. Keep bullet points concise and factual, in the candidate's own words where possible. Do not invent experience, dates, or skills that aren't present in the document.";
+const RESUME_PROMPT = `Extract this resume into the JSON schema.
+- Copy facts as written; don't invent employers, dates, or skills.
+- summary: 1-2 sentences in the third person about who this candidate is and what they're strongest at.
+- skills: concrete technologies, tools, and languages, most prominent first, at most 20.
+- experience: most recent first; bullets copied or lightly condensed.
+- headline: a one-line professional headline, e.g. "CS student at FIU building web apps".
+- targetRole and linkedinUrl are your best inference from the whole resume.
+- Omit optional fields you can't find.`;
 
 export async function parseResume(pdf: Buffer): Promise<ParsedResume> {
-  const response = await client().models.generateContent({
-    model: geminiModel(),
-    contents: createUserContent([
-      createPartFromText(RESUME_PROMPT),
-      createPartFromBase64(pdf.toString("base64"), "application/pdf"),
-    ]),
-    config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(ParsedResume) },
-  });
+  const response = await withRetry(() =>
+    client().models.generateContent({
+      model: geminiModel(),
+      contents: createUserContent([
+        createPartFromText(RESUME_PROMPT),
+        createPartFromBase64(pdf.toString("base64"), "application/pdf"),
+      ]),
+      config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(ParsedResume) },
+    }),
+  );
   return parseJsonResponse(ParsedResume, response.text);
 }
 
 /** 768-dimensional embedding (gemini-embedding-001 with outputDimensionality 768). */
 export async function embedText(text: string): Promise<number[]> {
-  const response = await client().models.embedContent({
-    model: geminiEmbedModel(),
-    contents: text,
-    config: { outputDimensionality: 768 },
-  });
+  const response = await withRetry(() =>
+    client().models.embedContent({
+      model: geminiEmbedModel(),
+      contents: text,
+      config: { outputDimensionality: 768 },
+    }),
+  );
   const values = response.embeddings?.[0]?.values;
   if (!values) throw new Error("Gemini returned no embedding");
   return values;
@@ -68,11 +78,13 @@ export async function generateQuestions(input: GenerateQuestionsInput): Promise<
   // Grounding + a strict JSON schema aren't reliably combinable on every model, so
   // grounded research runs as its own free-text call, then a second call structures it.
   if (grounded && company) {
-    const groundedResponse = await client().models.generateContent({
-      model: geminiModel(),
-      contents: `Research ${company}, focused on what's useful for writing mock interview questions for a "${jobTitle}" candidate: interview style, engineering/company culture, products, values, and any recent news. Be concise.`,
-      config: { tools: [{ googleSearch: {} }] },
-    });
+    const groundedResponse = await withRetry(() =>
+      client().models.generateContent({
+        model: geminiModel(),
+        contents: `Research ${company}, focused on what's useful for writing mock interview questions for a "${jobTitle}" candidate: interview style, engineering/company culture, products, values, and any recent news. Be concise.`,
+        config: { tools: [{ googleSearch: {} }] },
+      }),
+    );
     research = groundedResponse.text ?? "";
     sources = (groundedResponse.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
       .map((chunk) => chunk.web)
@@ -92,11 +104,13 @@ export async function generateQuestions(input: GenerateQuestionsInput): Promise<
     .filter(Boolean)
     .join("\n\n");
 
-  const structured = await client().models.generateContent({
-    model: geminiModel(),
-    contents: prompt,
-    config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(QuestionSet) },
-  });
+  const structured = await withRetry(() =>
+    client().models.generateContent({
+      model: geminiModel(),
+      contents: prompt,
+      config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(QuestionSet) },
+    }),
+  );
   const { questions } = parseJsonResponse(QuestionSet, structured.text);
   return questions.slice(0, count);
 }
@@ -106,16 +120,18 @@ export type TranscribedSegment = { startMs: number; endMs: number; text: string 
 const TranscribedSegments = z.array(z.object({ startMs: z.int(), endMs: z.int(), text: z.string() }));
 
 export async function transcribeAudio(audio: Buffer, mimeType: string): Promise<TranscribedSegment[]> {
-  const response = await client().models.generateContent({
-    model: geminiModel(),
-    contents: createUserContent([
-      createPartFromText(
-        "Transcribe this interview recording. Split it into segments at natural pauses or sentence breaks, giving each segment's start and end time in milliseconds from the start of the recording.",
-      ),
-      createPartFromBase64(audio.toString("base64"), mimeType),
-    ]),
-    config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(TranscribedSegments) },
-  });
+  const response = await withRetry(() =>
+    client().models.generateContent({
+      model: geminiModel(),
+      contents: createUserContent([
+        createPartFromText(
+          "Transcribe this interview recording. Split it into segments at natural pauses or sentence breaks, giving each segment's start and end time in milliseconds from the start of the recording.",
+        ),
+        createPartFromBase64(audio.toString("base64"), mimeType),
+      ]),
+      config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(TranscribedSegments) },
+    }),
+  );
   return parseJsonResponse(TranscribedSegments, response.text);
 }
 
@@ -141,10 +157,12 @@ export async function analyzeInterview(input: AnalyzeInterviewInput): Promise<An
     .filter(Boolean)
     .join("\n\n");
 
-  const response = await client().models.generateContent({
-    model: geminiModel(),
-    contents: prompt,
-    config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(AnalysisResult) },
-  });
+  const response = await withRetry(() =>
+    client().models.generateContent({
+      model: geminiModel(),
+      contents: prompt,
+      config: { responseMimeType: "application/json", responseJsonSchema: toResponseSchema(AnalysisResult) },
+    }),
+  );
   return parseJsonResponse(AnalysisResult, response.text);
 }
