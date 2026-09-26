@@ -1,6 +1,6 @@
-import type { ParsedResume } from "@/lib/contracts";
-import type { Profile, Resume } from "@/generated/prisma/client";
-import type { Experience, ParsedResume as ResumeScreenData, Role } from "@/lib/mock";
+import type { GeneratedQuestion, ParsedResume } from "@/lib/contracts";
+import type { Profile, Question as QuestionRow, Resume } from "@/generated/prisma/client";
+import type { Experience, Question, QuestionSource, ParsedResume as ResumeScreenData, Role } from "@/lib/mock";
 
 // Row → screen shapes. The UI was built against the types in src/lib/mock.ts, so API
 // routes return those shapes and screens only swap where the data comes from.
@@ -24,15 +24,21 @@ export type Viewer = {
   discoverable: boolean;
 };
 
+/** "Ada Lovelace" → "AL"; a one-word name (or none) uses its first two letters. */
+export function initialsFor(name: string, email = "") {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials =
+    words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? email).slice(0, 2);
+  return initials.toUpperCase();
+}
+
 export function toViewer(user: { id: string; name: string; email: string }, profile: Profile): Viewer {
   const words = user.name.trim().split(/\s+/).filter(Boolean);
-  const initials =
-    words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? user.email).slice(0, 2);
   return {
     id: user.id,
     name: user.name,
     firstName: words[0] ?? user.name,
-    initials: initials.toUpperCase(),
+    initials: initialsFor(user.name, user.email),
     email: user.email,
     headline: profile.headline ?? "",
     targetRole: profile.targetRole ?? "",
@@ -87,6 +93,27 @@ export function toResumeView(resume: Resume, downloadUrl: string | null): Resume
       degree: ed.degree ?? "",
       year: ed.year ?? "",
     })),
+  };
+}
+
+/**
+ * Question.source for a generated question: Gemini's own label when it gives one;
+ * otherwise reported ones cite the company, role-specific ones come from the job, and
+ * the rest are common for the role.
+ */
+export function questionSource(q: GeneratedQuestion): QuestionSource {
+  if (q.source) return q.source;
+  if (q.sourceUrl) return "company";
+  return q.category === "role-specific" ? "job" : "general";
+}
+
+export function toQuestionView(q: QuestionRow): Question {
+  return {
+    id: q.id,
+    text: q.text,
+    source: (["company", "job", "general"] as const).find((s) => s === q.source) ?? "general",
+    note: q.rationale ?? undefined,
+    sourceUrl: q.sourceUrl ?? undefined,
   };
 }
 

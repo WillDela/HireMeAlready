@@ -1,12 +1,15 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { type ReactNode, useEffect, useRef } from "react";
 import { MicOff, VideoOff } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /**
- * A participant's video. This prototype has no media stream, so a live
- * camera renders as the person's monogram on the feed ground.
+ * A participant's video. With a `stream` it plays the live feed (your own tile is
+ * muted and mirrored); without one, the camera renders as the person's monogram.
  */
 export function VideoTile({
+  stream,
   name,
   initials,
   self = false,
@@ -17,6 +20,7 @@ export function VideoTile({
   className,
   children,
 }: {
+  stream?: MediaStream | null;
   name: string;
   initials: string;
   self?: boolean;
@@ -28,6 +32,12 @@ export function VideoTile({
   children?: ReactNode;
 }) {
   const label = self ? "You" : name;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const live = Boolean(stream) && !cameraOff;
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.srcObject = stream ?? null;
+  }, [stream, live]);
   return (
     <figure
       className={cn(
@@ -37,7 +47,15 @@ export function VideoTile({
       )}
       aria-label={`${label}${cameraOff ? ", camera off" : ""}${muted ? ", muted" : ""}`}
     >
-      {cameraOff ? (
+      {live ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={self}
+          className={cn("absolute inset-0 size-full object-cover", self && "-scale-x-100")}
+        />
+      ) : cameraOff ? (
         <div className="absolute inset-0 grid place-items-center text-ink-2">
           <div className="flex flex-col items-center gap-2">
             <VideoOff size={compact ? 20 : 28} aria-hidden="true" />

@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Search } from "lucide-react";
-import { matchPartners, userResume } from "@/lib/mock";
+import type { QueueState } from "@/lib/contracts";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
+import { apiFetch, useApiResource } from "@/lib/use-api";
+import type { ResumeView } from "@/lib/views";
 import { DeviceCheck } from "@/components/call/DeviceCheck";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -14,7 +16,19 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Stamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned } from "@/components/ui/States";
 
-type Phase = "idle" | "searching" | "matched" | "lobby";
+type Phase = "idle" | "searching" | "matched" | "lobby" | "none" | "error";
+type Match = Extract<QueueState, { state: "matched" }>;
+
+const POLL_MS = 2000;
+/** Give up (and offer AI practice) after this long without a match. */
+const SEARCH_LIMIT_S = 120;
+/** Consecutive failed polls before we show the error state. */
+const MAX_POLL_FAILURES = 3;
+
+/** Stop waiting. `keepalive` lets it finish while the page unloads. */
+function leaveQueue(keepalive = false) {
+  return fetch("/api/queue", { method: "DELETE", keepalive }).catch(() => undefined);
+}
 
 function SearchingRing() {
   return (
@@ -37,25 +51,126 @@ export default function LivePracticePage() {
   const [role] = useRole();
   const [phase, setPhase] = useState<Phase>("idle");
   const [seconds, setSeconds] = useState(0);
-  const [company, setCompany] = useState("Halcyon Health");
-  const [jobTitle, setJobTitle] = useState("Product Designer");
+  const [company, setCompany] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [joining, setJoining] = useState(false);
-  const partner = matchPartners[role];
+  const [match, setMatch] = useState<Match | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [round, setRound] = useState(0); // restarts the search clock
+  const resume = useApiResource<ResumeView | null>("/api/resume").data;
+  const latest = resume?.experience[0];
+  const partner = match?.partner;
   const seeking = role === "interviewee" ? "an interviewer" : "a candidate";
+  const failures = useRef(0);
+  const inQueue = useRef(false); // true from joining until we cancel or head into the call
+
+  const apply = useCallback((s: QueueState) => {
+    failures.current = 0;
+    if (s.state === "matched") {
+      setMatch(s);
+      setPhase((p) => (p === "searching" ? "matched" : p));
+    } else if (s.state === "waiting") {
+      if (s.partnerLeft) {
+        setNotice(`${s.partnerLeft.name} left. Looking again.`);
+        setSeconds(0);
+        setRound((r) => r + 1);
+      }
+      setMatch(null);
+      setPhase((p) => (p === "matched" || p === "lobby" ? "searching" : p));
+    } else {
+      inQueue.current = false;
+      setMatch(null);
+      setPhase((p) => (p === "searching" || p === "matched" || p === "lobby" ? "idle" : p));
+    }
+  }, []);
+
+  const polling = !forced && (phase === "searching" || phase === "matched" || phase === "lobby");
+  useEffect(() => {
+    if (!polling) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    async function poll() {
+      try {
+        const s = await apiFetch<QueueState>("/api/queue");
+        if (!cancelled) apply(s);
+      } catch {
+        if (!cancelled && ++failures.current >= MAX_POLL_FAILURES) {
+          inQueue.current = false;
+          leaveQueue();
+          setPhase("error");
+          return;
+        }
+      }
+      if (!cancelled) timer = window.setTimeout(poll, POLL_MS);
+    }
+    timer = window.setTimeout(poll, POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [polling, apply]);
 
   useEffect(() => {
     if (phase !== "searching" || forced) return;
     const tick = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    const found = window.setTimeout(() => setPhase("matched"), 4200);
+    const giveUp = window.setTimeout(() => {
+      inQueue.current = false;
+      leaveQueue();
+      setPhase("none");
+    }, SEARCH_LIMIT_S * 1000);
     return () => {
       window.clearInterval(tick);
-      window.clearTimeout(found);
+      window.clearTimeout(giveUp);
     };
-  }, [phase, forced]);
+  }, [phase, forced, round]);
 
-  function start() {
+  // Leaving the page (or closing the tab) takes us out of line. If this never arrives,
+  // our entry goes stale and nobody gets matched with it anyway.
+  useEffect(() => {
+    const onHide = () => {
+      if (inQueue.current) leaveQueue(true);
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      onHide();
+    };
+  }, []);
+
+  async function start() {
     setSeconds(0);
+    setRound((r) => r + 1);
+    setNotice(null);
+    setMatch(null);
     setPhase("searching");
+    inQueue.current = true;
+    try {
+      apply(
+        await apiFetch<QueueState>("/api/queue", {
+          method: "POST",
+          body: JSON.stringify({
+            role: role === "interviewee" ? "INTERVIEWEE" : "INTERVIEWER",
+            jobTitle: jobTitle.trim() || undefined,
+            company: company.trim() || undefined,
+          }),
+        }),
+      );
+    } catch {
+      inQueue.current = false;
+      setPhase("error");
+    }
+  }
+
+  async function cancel() {
+    inQueue.current = false;
+    setPhase("idle");
+    setMatch(null);
+    await leaveQueue();
+  }
+
+  async function findSomeoneElse() {
+    await leaveQueue();
+    await start();
   }
 
   const shown =
@@ -86,7 +201,7 @@ export default function LivePracticePage() {
               </div>
             ) : (
               <p className="mt-2 text-ink-2">
-                Candidates targeting design roles, based on your experience at {userResume.experience[0].company}.
+                Candidates preparing for roles close to your experience{latest ? ` at ${latest.company}` : ""}.
               </p>
             )}
             <Button size="lg" className="mt-7 w-full sm:w-auto" onClick={start} icon={<Search size={18} aria-hidden="true" />}>
@@ -100,11 +215,16 @@ export default function LivePracticePage() {
             </h2>
             <ul className="mt-3 space-y-2 text-[0.9375rem] text-manila-ink">
               <li>
-                Your skills: <span className="font-semibold text-ink">{userResume.skills.slice(0, 3).join(", ")}</span>
+                Your skills:{" "}
+                <span className="font-semibold text-ink">
+                  {resume?.skills.length ? resume.skills.slice(0, 3).join(", ") : "from your resume"}
+                </span>
               </li>
-              <li>
-                Your experience: <span className="font-semibold text-ink">{userResume.experience[0].title}, 4 years</span>
-              </li>
+              {latest ? (
+                <li>
+                  Your experience: <span className="font-semibold text-ink">{latest.title}, {latest.company}</span>
+                </li>
+              ) : null}
               {role === "interviewee" ? (
                 <li>
                   Target: <span className="font-semibold text-ink">{jobTitle || "any role"}{company ? ` at ${company}` : ""}</span>
@@ -127,7 +247,10 @@ export default function LivePracticePage() {
             Looking for {seeking}…
           </h2>
           <p className="mt-2 text-ink-2" role="status" aria-live="polite">
-            {role === "interviewee" ? `Someone who knows product design and ${company || "your target company"}'s field.` : "Someone preparing for a design role."}
+            {notice ??
+              (role === "interviewee"
+                ? `Someone who can interview you for ${jobTitle.trim() || "your target role"}${company.trim() ? ` at ${company.trim()}` : ""}.`
+                : "Someone preparing for a role close to your experience.")}
           </p>
           <p className="tnum mt-4 text-[0.875rem] text-ink-3" aria-hidden="true">
             {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} elapsed · usually under a minute
@@ -137,7 +260,7 @@ export default function LivePracticePage() {
             className="mt-7"
             onClick={() => {
               if (forced) setForcedState(null);
-              setPhase("idle");
+              cancel();
             }}
           >
             Cancel
@@ -163,13 +286,13 @@ export default function LivePracticePage() {
 
       {shown === "error" ? (
         <div className="mx-auto max-w-xl">
-          <ErrorReturned title="Matching isn't working right now" onRetry={() => { setForcedState(null); setPhase("idle"); }}>
+          <ErrorReturned title="Matching isn't working right now" onRetry={() => { if (forced) setForcedState(null); setPhase("idle"); }}>
             This is on our side, not your connection. AI practice still works while we fix it.
           </ErrorReturned>
         </div>
       ) : null}
 
-      {shown === "matched" ? (
+      {shown === "matched" && partner ? (
         <section aria-labelledby="matched-heading" className="relative mx-auto max-w-xl pt-7 sheet-in">
           <div className="folder-tab w-32" aria-hidden="true" />
           <div className="folder p-3 sm:p-4">
@@ -188,7 +311,7 @@ export default function LivePracticePage() {
               <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-edge pt-5 text-[0.9375rem]">
                 <div>
                   <dt className="cond text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">Their role</dt>
-                  <dd className="mt-1 font-bold">{partner.role === "interviewer" ? "Interviewer" : "Interviewee"}</dd>
+                  <dd className="mt-1 font-bold">{partner.role === "INTERVIEWER" ? "Interviewer" : "Interviewee"}</dd>
                 </div>
                 <div>
                   <dt className="cond text-[0.75rem] font-bold tracking-[0.1em] text-ink-2 uppercase">Practice interviews</dt>
@@ -207,7 +330,7 @@ export default function LivePracticePage() {
               </dl>
             </div>
             <div className="flex flex-col-reverse gap-2 px-2 pt-4 pb-1 sm:flex-row sm:justify-end">
-              <Button variant="ghost" onClick={start}>
+              <Button variant="ghost" onClick={findSomeoneElse}>
                 Find someone else
               </Button>
               <Button size="lg" onClick={() => setPhase("lobby")}>
@@ -218,7 +341,7 @@ export default function LivePracticePage() {
         </section>
       ) : null}
 
-      {shown === "lobby" ? (
+      {shown === "lobby" && match && partner ? (
         <section aria-labelledby="lobby-heading" className="sheet-in">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -227,7 +350,9 @@ export default function LivePracticePage() {
                 <h2 id="lobby-heading" className="text-[1.25rem] font-bold">
                   Lobby
                 </h2>
-                <p className="text-[0.9375rem] text-manila-ink">{partner.name} is in the lobby and ready.</p>
+                <p className="text-[0.9375rem] text-manila-ink">
+                  You&apos;re matched with {partner.name}. The call starts when you both join.
+                </p>
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setPhase("matched")} icon={<ArrowLeft size={16} aria-hidden="true" />}>
@@ -240,7 +365,8 @@ export default function LivePracticePage() {
             joining={joining}
             onJoin={() => {
               setJoining(true);
-              router.push("/call/live-halcyon");
+              inQueue.current = false; // the call page keeps the match alive from here
+              router.push(`/call/${match.interviewId}`);
             }}
           />
         </section>
