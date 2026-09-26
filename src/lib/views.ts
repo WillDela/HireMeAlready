@@ -14,6 +14,9 @@ export type Viewer = {
   initials: string;
   email: string;
   headline: string;
+  targetRole: string;
+  linkedinUrl: string;
+  onboarded: boolean; // false until they confirm their profile at /onboarding
   isAdmin: boolean;
   defaultRole: Role;
   recordingConsent: boolean;
@@ -32,6 +35,9 @@ export function toViewer(user: { id: string; name: string; email: string }, prof
     initials: initials.toUpperCase(),
     email: user.email,
     headline: profile.headline ?? "",
+    targetRole: profile.targetRole ?? "",
+    linkedinUrl: profile.linkedinUrl ?? "",
+    onboarded: profile.onboardedAt !== null,
     isAdmin: profile.isAdmin,
     defaultRole: profile.preferredRole === "INTERVIEWER" ? "interviewer" : "interviewee",
     recordingConsent: profile.recordingConsent,
@@ -44,6 +50,8 @@ export type ResumeView = ResumeScreenData & {
   id: string;
   parseStatus: Resume["parseStatus"];
   downloadUrl: string | null;
+  /** Profile fields drafted from the resume, for onboarding to pre-fill. "" when not found. */
+  suggested: { name: string; headline: string; targetRole: string; linkedinUrl: string };
 };
 
 export function toResumeView(resume: Resume, downloadUrl: string | null): ResumeView {
@@ -52,6 +60,12 @@ export function toResumeView(resume: Resume, downloadUrl: string | null): Resume
     id: resume.id,
     parseStatus: resume.parseStatus,
     downloadUrl,
+    suggested: {
+      name: parsed?.name ?? "",
+      headline: parsed?.headline ?? "",
+      targetRole: parsed?.targetRole || parsed?.experience[0]?.title || "",
+      linkedinUrl: normalizeUrl(parsed?.linkedinUrl),
+    },
     fileName: resume.fileName,
     fileSize: resume.sizeBytes ? formatBytes(resume.sizeBytes) : "",
     pages: 0, // not tracked; the resume page hides the count when it's 0
@@ -82,4 +96,10 @@ export function formatBytes(bytes: number) {
 
 export function formatDate(date: Date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** Resumes often write "linkedin.com/in/x" without a scheme, which the profile API rejects. */
+function normalizeUrl(url: string | undefined) {
+  if (!url) return "";
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }

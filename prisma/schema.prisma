@@ -164,6 +164,7 @@ model Profile {
   shareResume      Boolean       @default(true) // matched interviewers see the parsed resume
   discoverable     Boolean       @default(true) // shows up in Find people
   isAdmin          Boolean       @default(false) // sees /admin/reports; set by hand
+  onboardedAt      DateTime? // set when the user confirms their profile; gates the app
 
   @@map("profile")
 }
