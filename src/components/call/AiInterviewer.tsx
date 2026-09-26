@@ -46,11 +46,13 @@ function AiInterviewerSession({ interviewId, active, muted, onAgentEnded, handle
       }).catch((err) => console.error("Couldn't link the AI conversation to this interview:", err));
     },
     onDisconnect: (details) => {
-      if (endingRef.current) return;
-      if (details.reason === "agent") {
+      if (endingRef.current || details.reason === "user") return;
+      // The SDK labels any clean socket close "agent"; only the agent's end_call tool
+      // means the interview is over. Anything else is a dropped connection.
+      if (details.reason === "agent" && details.context?.type === "end_call") {
         endingRef.current = true;
         onAgentEndedRef.current();
-      } else if (details.reason === "error") {
+      } else {
         setError("The connection to the AI interviewer dropped.");
       }
     },
