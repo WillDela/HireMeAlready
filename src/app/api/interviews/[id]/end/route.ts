@@ -7,9 +7,10 @@ import { requireUser } from "@/lib/session";
 
 // POST /api/interviews/:id/end: marks the interview COMPLETED. For AI mode it then, in
 // the background, pulls the ElevenLabs transcript and runs the analysis
-// (src/lib/pipeline/finalize.ts). Peer calls end through PATCH /api/interviews/:id/peer
-// instead, which finalizes them the same way. Safe to call more than once: only the
-// first call finalizes.
+// (src/lib/pipeline/finalize.ts). Peer mode finalizes once the recordings are uploaded
+// (POST /api/interviews/:id/recordings, per docs/PLAN.md), not here, since at this point
+// there's nothing to transcribe yet. Safe to call more than once: only the first call
+// finalizes.
 export function POST(_request: Request, ctx: RouteContext<"/api/interviews/[id]/end">) {
   return handleRoute(async () => {
     const user = await requireUser();

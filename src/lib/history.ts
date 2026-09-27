@@ -16,6 +16,7 @@ const interviewInclude = {
 type InterviewRow = Prisma.InterviewGetPayload<{ include: typeof interviewInclude }>;
 
 const AI_NAME = "AI interviewer";
+const RECORDING_UPLOAD_GRACE_MS = 5 * 60 * 1000;
 
 // What each AnalysisResult score measures, shown under its score card.
 const DIMENSIONS: { key: keyof AnalysisResult["scores"]; name: string; rationale: string }[] = [
@@ -46,6 +47,7 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
     include: {
       ...interviewInclude,
       segments: { orderBy: { startMs: "asc" } },
+      recordings: { where: { status: "READY" }, select: { id: true } },
       // Feedback about you (as the candidate) or by you (as the interviewer); picked below.
       feedback: { where: { OR: [{ subjectId: userId }, { authorId: userId }] }, include: { author: true } },
     },
@@ -81,6 +83,16 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
         },
       })
     : [];
+
+  // A peer interview is only transcribed once a recording finishes uploading; if none
+  // has by now, none is coming.
+  const recordingsMissing =
+    iv.mode === "PEER" &&
+    iv.transcriptStatus === "PENDING" &&
+    iv.recordings.length === 0 &&
+    iv.endedAt !== null &&
+    Date.now() - iv.endedAt.getTime() > RECORDING_UPLOAD_GRACE_MS;
+  const transcriptFailed = iv.transcriptStatus === "FAILED" || recordingsMissing;
 
   const feedback = iv.feedback.find((f) => (me.role === "INTERVIEWER" ? f.authorId : f.subjectId) === userId);
   return {
@@ -136,10 +148,10 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
         ? "interviewer"
         : analysis
           ? "ready"
-          : iv.analysis?.status === "FAILED" || (!iv.analysis && iv.transcriptStatus === "FAILED")
+          : iv.analysis?.status === "FAILED" || (!iv.analysis && transcriptFailed)
             ? "failed"
             : "pending",
-    transcriptStatus: iv.segments.length ? "ready" : iv.transcriptStatus === "FAILED" ? "failed" : "pending",
+    transcriptStatus: iv.segments.length ? "ready" : transcriptFailed ? "failed" : "pending",
   };
 }
 

@@ -1,21 +1,19 @@
 import type { GeneratedQuestion, TranscriptLine } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { getConversation } from "@/lib/elevenlabs";
-import { analyzeInterview } from "@/lib/gemini";
+import { analyzeInterview, transcribeAudio } from "@/lib/gemini";
 import { outOf5 } from "@/lib/history";
 import { log } from "@/lib/log";
 import { notify } from "@/lib/notifications";
+import { getObjectBuffer } from "@/lib/storage";
 
-// Owner: Stream C. Runs after an interview ends, via `after()`: POST /api/interviews/:id/end
-// for AI mode, the PATCH /api/interviews/:id/peer `left` that ends a peer call. Collects
-// the transcript, then runs Gemini's analysis on it. Both modes are transcribed live by
-// ElevenLabs: AI mode reads the conversation's transcript back from ElevenLabs; peer mode
-// already saved each line as it was said (src/lib/live-transcript.ts).
+// Owner: Stream C. Runs after an interview ends (called from POST /api/interviews/:id/end
+// via `after()`): pulls the transcript, saves it, then runs Gemini's analysis on it.
+// AI mode reads the transcript from ElevenLabs; peer mode transcribes each participant's
+// own recording and merges them by wall-clock offset.
 
 const CONVERSATION_POLL_MS = 2000;
 const CONVERSATION_POLL_ATTEMPTS = 20; // ElevenLabs finishes processing a few seconds after the call ends; ~40s ceiling
-// Each side's last sentence is committed and posted a few seconds after the call ends.
-const PEER_LAST_LINES_MS = 8000;
 
 function loadInterview(interviewId: string) {
   return db.interview.findUnique({
@@ -23,6 +21,7 @@ function loadInterview(interviewId: string) {
     include: {
       questions: { orderBy: { order: "asc" } },
       participants: true,
+      recordings: true,
       feedback: true,
     },
   });
@@ -42,13 +41,9 @@ export async function finalizeInterview(interviewId: string): Promise<void> {
 
   await db.interview.update({ where: { id: interviewId }, data: { transcriptStatus: "PROCESSING" } });
   try {
-    let transcript: TranscriptLine[];
-    if (interview.mode === "AI") {
-      transcript = await finalizeAiTranscript(interview);
-      await saveTranscript(interviewId, transcript);
-    } else {
-      transcript = await finalizePeerTranscript(interview);
-    }
+    const transcript =
+      interview.mode === "AI" ? await finalizeAiTranscript(interview) : await finalizePeerTranscript(interview);
+    await saveTranscript(interviewId, transcript);
     await db.interview.update({ where: { id: interviewId }, data: { transcriptStatus: "READY" } });
     log.info("pipeline", "transcript ready", { interview: interviewId, lines: transcript.length, ms: since() });
     await runAnalysis(interview, transcript);
@@ -88,25 +83,44 @@ async function finalizeAiTranscript(interview: InterviewForFinalize): Promise<Tr
   return lines;
 }
 
-/** The lines both sides saved during the call, once the last ones are in. Already stored. */
 async function finalizePeerTranscript(interview: InterviewForFinalize): Promise<TranscriptLine[]> {
-  await sleep(PEER_LAST_LINES_MS);
-  const segments = await db.transcriptSegment.findMany({
-    where: { interviewId: interview.id },
-    orderBy: { startMs: "asc" },
-  });
-  if (segments.length === 0) {
-    throw new Error(`Interview ${interview.id} has no live transcript (did Scribe connect on either side?)`);
+  const interviewStart = (interview.startedAt ?? interview.createdAt).getTime();
+  const lines: TranscriptLine[] = [];
+  // A PENDING recording's upload never finished.
+  const ready = interview.recordings.filter((r) => r.status === "READY");
+  if (ready.length < interview.recordings.length) {
+    log.warn("pipeline", "some recordings never finished uploading", {
+      interview: interview.id,
+      ready: ready.length,
+      total: interview.recordings.length,
+    });
   }
-  return segments.map(
-    (s): TranscriptLine => ({
-      speaker: s.speaker,
-      userId: s.userId ?? undefined,
-      startMs: s.startMs,
-      endMs: s.endMs ?? undefined,
-      text: s.text,
-    }),
-  );
+  for (const recording of ready) {
+    const participant = interview.participants.find((p) => p.id === recording.participantId);
+    if (!participant) continue;
+    const buffer = await getObjectBuffer(recording.storageKey);
+    const segments = await transcribeAudio(buffer, recording.mimeType);
+    log.info("pipeline", "recording transcribed", {
+      interview: interview.id,
+      role: participant.role,
+      kb: Math.round(buffer.length / 1024),
+      segments: segments.length,
+    });
+    const offsetMs = recording.startedAt.getTime() - interviewStart;
+    for (const segment of segments) {
+      lines.push({
+        speaker: participant.role,
+        userId: participant.userId,
+        startMs: offsetMs + segment.startMs,
+        endMs: offsetMs + segment.endMs,
+        text: segment.text,
+      });
+    }
+  }
+  if (lines.length === 0) {
+    throw new Error(`Interview ${interview.id} has no recordings with speech to transcribe`);
+  }
+  return lines.sort((a, b) => a.startMs - b.startMs);
 }
 
 async function saveTranscript(interviewId: string, transcript: TranscriptLine[]) {
