@@ -5,7 +5,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { Dimension, TranscriptTurn } from "@/lib/mock";
 import { type HistoryDetail, type HistoryItem, formatDate, initialsFor } from "@/lib/views";
 
-// Past interviews for /history, /history/[id] and the dashboard's last-interview card.
+// Past interviews for /history, /history/[id] and the last-interview card.
 // Read-only: interviews are created and finished elsewhere (the queue, AI practice, and
 // the finalize pipeline that writes transcripts and analyses).
 
@@ -19,10 +19,10 @@ const AI_NAME = "AI interviewer";
 
 // What each AnalysisResult score measures, shown under its score card.
 const DIMENSIONS: { key: keyof AnalysisResult["scores"]; name: string; rationale: string }[] = [
-  { key: "communication", name: "Communication", rationale: "How clearly and concisely you got each answer across." },
-  { key: "structure", name: "Structure", rationale: "Whether answers had a clear setup, what you did, and the result." },
-  { key: "technicalDepth", name: "Technical depth", rationale: "How far you went into the how and the why." },
-  { key: "relevance", name: "Relevance", rationale: "How closely your answers fit the question and the role." },
+  { key: "communication", name: "Communication", rationale: "How clearly and concisely each answer got across." },
+  { key: "structure", name: "Structure", rationale: "Whether answers had a clear setup, the action taken, and the result." },
+  { key: "technicalDepth", name: "Technical depth", rationale: "How far answers went into the how and the why." },
+  { key: "relevance", name: "Relevance", rationale: "How closely answers fit the question and the role." },
 ];
 
 /** GET /api/interviews: your completed interviews, newest first. */
@@ -34,8 +34,9 @@ export async function listInterviews(userId: string): Promise<HistoryItem[]> {
   return interviews
     .sort((a, b) => when(b).getTime() - when(a).getTime())
     .map((iv) => {
-      const analysis = myAnalysis(iv, userId);
-      return { ...toSummary(iv, userId, analysis), workOnNext: analysis?.improvements[0] ?? null };
+      const analysis = candidateAnalysis(iv);
+      const workOnNext = iv.analysis?.subjectUserId === userId ? (analysis?.improvements[0] ?? null) : null;
+      return { ...toSummary(iv, userId, analysis), workOnNext };
     });
 }
 
@@ -53,7 +54,7 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
   if (!iv) throw new HttpError(404, "Interview not found");
 
   const me = iv.participants.find((p) => p.userId === userId)!;
-  const analysis = myAnalysis(iv, userId);
+  const analysis = candidateAnalysis(iv);
   const summary = toSummary(iv, userId, analysis);
 
   const transcript: TranscriptTurn[] = iv.segments.map((s) => {
@@ -131,14 +132,11 @@ export async function getInterviewDetail(interviewId: string, userId: string): P
             };
           })
         : [],
-    analysisStatus:
-      me.role === "INTERVIEWER"
-        ? "interviewer"
-        : analysis
-          ? "ready"
-          : iv.analysis?.status === "FAILED" || (!iv.analysis && iv.transcriptStatus === "FAILED")
-            ? "failed"
-            : "pending",
+    analysisStatus: analysis
+      ? "ready"
+      : iv.analysis?.status === "FAILED" || (!iv.analysis && iv.transcriptStatus === "FAILED")
+        ? "failed"
+        : "pending",
     transcriptStatus: iv.segments.length ? "ready" : iv.transcriptStatus === "FAILED" ? "failed" : "pending",
   };
 }
@@ -147,10 +145,13 @@ function when(iv: InterviewRow) {
   return iv.startedAt ?? iv.createdAt;
 }
 
-/** The analysis of your answers: only interviewees are analyzed, and only once it's READY. */
-function myAnalysis(iv: InterviewRow, userId: string): AnalysisResult | null {
+/**
+ * The analysis of the candidate's answers, once it's READY. Only the interviewee is analyzed,
+ * and both participants see the same one so their files agree.
+ */
+function candidateAnalysis(iv: InterviewRow): AnalysisResult | null {
   const a = iv.analysis;
-  if (!a || a.status !== "READY" || a.subjectUserId !== userId) return null;
+  if (!a || a.status !== "READY") return null;
   const parsed = AnalysisResult.safeParse(a.result);
   return parsed.success ? parsed.data : null;
 }

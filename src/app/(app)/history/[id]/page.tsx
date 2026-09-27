@@ -65,22 +65,15 @@ function Summary({ iv, onJump }: { iv: InterviewDetail; onJump: () => void }) {
 function Analysis({ iv }: { iv: InterviewDetail }) {
   if (!iv.analysis && iv.analysisStatus === "pending") {
     return (
-      <EmptyFolder title="Scoring your answers">
+      <EmptyFolder title={iv.yourRole === "interviewer" ? `Scoring ${iv.partner.split(" ")[0]}'s answers` : "Scoring your answers"}>
         The analysis usually takes a minute or two after the interview ends. This page updates when it&apos;s ready.
-      </EmptyFolder>
-    );
-  }
-  if (!iv.analysis && iv.analysisStatus === "failed") {
-    return (
-      <EmptyFolder title="We couldn't score this one">
-        Something went wrong reading this interview. Your transcript and any interviewer feedback are still in the other tabs.
       </EmptyFolder>
     );
   }
   if (!iv.analysis) {
     return (
-      <EmptyFolder title="Not scored">
-        You were the interviewer in this one, so there&apos;s no analysis of your answers. Your notes and feedback are in the other tabs.
+      <EmptyFolder title="We couldn't score this one">
+        Something went wrong reading this interview. Your transcript and any interviewer feedback are still in the other tabs.
       </EmptyFolder>
     );
   }

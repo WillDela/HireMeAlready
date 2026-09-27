@@ -125,15 +125,15 @@ export function toQuestionView(q: QuestionRow): Question {
   };
 }
 
-/** GET /api/interviews: a row on /history, plus the dashboard's "work on next" line. */
+/** GET /api/interviews: a row on /history. */
 export type HistoryItem = InterviewSummary & { workOnNext: string | null };
 
 /**
- * GET /api/interviews/:id. `analysisStatus` says why `analysis` is null: you were the
- * interviewer, scoring hasn't finished, or it failed. Same for the transcript.
+ * GET /api/interviews/:id. `analysisStatus` says why `analysis` is null: scoring hasn't
+ * finished, or it failed. Same for the transcript.
  */
 export type HistoryDetail = InterviewDetail & {
-  analysisStatus: "ready" | "pending" | "failed" | "interviewer";
+  analysisStatus: "ready" | "pending" | "failed";
   transcriptStatus: "ready" | "pending" | "failed";
 };
 
