@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Popover } from "@/components/ui/Popover";
 import { EmptyFolder } from "@/components/ui/States";
 import { RoleToggle } from "./RoleToggle";
+import { ThemeToggle } from "./ThemeToggle";
 import { Wordmark } from "./Wordmark";
 
 // Pages where interviewee vs interviewer changes nothing, so the role toggle is hidden.
@@ -48,6 +49,7 @@ export function TopBar() {
         {showRoleToggle ? <RoleToggle className="ml-auto md:ml-0" /> : null}
 
         <div className={cn("flex items-center gap-1", showRoleToggle ? "md:ml-auto" : "ml-auto")}>
+          <ThemeToggle />
           <Popover
             buttonLabel={unread ? `Notifications, ${unread} unread` : "Notifications"}
             panelLabel="Notifications"
