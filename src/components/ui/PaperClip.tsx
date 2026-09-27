@@ -9,7 +9,7 @@ export function PaperClip({ className }: { className?: string }) {
       width="22"
       height="54"
       fill="none"
-      className={cn("pointer-events-none absolute -top-5 drop-shadow-[0_2px_1.5px_oklch(0.2_0.03_266/0.28)]", className)}
+      className={cn("pointer-events-none absolute -top-5 overflow-visible drop-shadow-[0_2px_1.5px_oklch(0.2_0.03_266/0.28)]", className)}
     >
       {/* Wire: outer loop, then the inner tongue. */}
       <path

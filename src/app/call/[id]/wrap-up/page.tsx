@@ -172,7 +172,7 @@ export default function WrapUpPage({ params }: { params: Promise<{ id: string }>
     <div className="desk min-h-dvh">
       <header className="mx-auto flex max-w-2xl px-4 pt-6 text-ink sm:px-0">
         <Link href="/dashboard" aria-label="hire-me-already, home">
-          <Wordmark compact />
+          <Wordmark />
         </Link>
       </header>
       <main id="main" className="px-4 pt-10 pb-20 sm:px-6">
