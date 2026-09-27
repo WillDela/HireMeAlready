@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getConversation } from "@/lib/elevenlabs";
 import { analyzeInterview } from "@/lib/gemini";
 import { outOf5 } from "@/lib/history";
+import { log } from "@/lib/log";
 import { notify } from "@/lib/notifications";
 
 // Owner: Stream C. Runs after an interview ends, via `after()`: POST /api/interviews/:id/end
@@ -31,7 +32,13 @@ type InterviewForFinalize = NonNullable<Awaited<ReturnType<typeof loadInterview>
 
 export async function finalizeInterview(interviewId: string): Promise<void> {
   const interview = await loadInterview(interviewId);
-  if (!interview) return;
+  if (!interview) {
+    log.warn("pipeline", "interview not found", { interview: interviewId });
+    return;
+  }
+  const started = performance.now();
+  const since = () => Math.round(performance.now() - started);
+  log.info("pipeline", "finalizing", { interview: interviewId, mode: interview.mode });
 
   await db.interview.update({ where: { id: interviewId }, data: { transcriptStatus: "PROCESSING" } });
   try {
@@ -43,9 +50,10 @@ export async function finalizeInterview(interviewId: string): Promise<void> {
       transcript = await finalizePeerTranscript(interview);
     }
     await db.interview.update({ where: { id: interviewId }, data: { transcriptStatus: "READY" } });
+    log.info("pipeline", "transcript ready", { interview: interviewId, lines: transcript.length, ms: since() });
     await runAnalysis(interview, transcript);
   } catch (err) {
-    console.error(`Interview ${interviewId} failed to finalize`, err);
+    log.error("pipeline", "transcript failed", { interview: interviewId, ms: since(), err });
     await db.interview.update({ where: { id: interviewId }, data: { transcriptStatus: "FAILED" } });
   }
 }
@@ -59,6 +67,12 @@ async function finalizeAiTranscript(interview: InterviewForFinalize): Promise<Tr
     await sleep(CONVERSATION_POLL_MS);
     conversation = await getConversation(interview.elevenConversation);
   }
+  log.info("pipeline", "ElevenLabs conversation fetched", {
+    interview: interview.id,
+    conversation: interview.elevenConversation,
+    status: conversation.status,
+    turns: conversation.transcript.length,
+  });
   const lines = conversation.transcript
     .filter((turn): turn is typeof turn & { message: string } => Boolean(turn.message))
     .map(
@@ -114,12 +128,16 @@ async function saveTranscript(interviewId: string, transcript: TranscriptLine[])
 
 async function runAnalysis(interview: InterviewForFinalize, transcript: TranscriptLine[]) {
   const interviewee = interview.participants.find((p) => p.role === "INTERVIEWEE");
-  if (!interviewee) return;
+  if (!interviewee) {
+    log.warn("pipeline", "no interviewee, skipping analysis", { interview: interview.id });
+    return;
+  }
 
   // Nothing the candidate said means nothing to score. Fail visibly rather than have
   // Gemini invent an assessment of an empty interview.
   if (!transcript.some((line) => line.speaker === "INTERVIEWEE")) {
     const error = "No answers were captured, so there's nothing to analyze.";
+    log.warn("pipeline", "analysis skipped: no answers in transcript", { interview: interview.id });
     await db.analysis.upsert({
       where: { interviewId: interview.id },
       create: { interviewId: interview.id, subjectUserId: interviewee.userId, status: "FAILED", error },
@@ -152,6 +170,7 @@ async function runAnalysis(interview: InterviewForFinalize, transcript: Transcri
       where: { interviewId: interview.id },
       data: { status: "READY", result, model: process.env.GEMINI_MODEL || null, error: null },
     });
+    log.info("pipeline", "analysis ready", { interview: interview.id, score: result.overallScore });
     await notify(interviewee.userId, {
       kind: "RESULTS_READY",
       title: "Your results are filed",
@@ -159,7 +178,7 @@ async function runAnalysis(interview: InterviewForFinalize, transcript: Transcri
       href: `/history/${interview.id}`,
     });
   } catch (err) {
-    console.error(`Interview ${interview.id} failed to analyze`, err);
+    log.error("pipeline", "analysis failed", { interview: interview.id, err });
     await db.analysis.update({
       where: { interviewId: interview.id },
       data: { status: "FAILED", error: String(err) },

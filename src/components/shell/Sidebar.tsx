@@ -16,8 +16,8 @@ export function Sidebar() {
   return (
     <aside className="surface-drawer sticky top-0 hidden h-dvh w-60 flex-none flex-col bg-drawer md:flex">
       <div className="px-6 pt-7 pb-8">
-        <Link href="/dashboard" className="inline-block text-hi" aria-label="hire-me-already, home">
-          <Wordmark />
+        <Link href="/dashboard" className="inline-block" aria-label="Hire Me Already, home">
+          <Wordmark variant="vertical" verticalClassName="text-[2rem]" />
         </Link>
       </div>
 
@@ -90,7 +90,7 @@ export function MobileTabBar() {
                 <span
                   className={cn(
                     "grid h-7 w-11 place-items-center rounded-[4px] transition-colors duration-150",
-                    active && "bg-hi text-hi-ink",
+                    active && "bg-stamp text-white",
                   )}
                 >
                   <Icon size={19} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />

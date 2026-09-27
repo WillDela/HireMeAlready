@@ -1,6 +1,7 @@
 import { ParsedResume, RESUME_MAX_BYTES } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { embedText, parseResume } from "@/lib/gemini";
+import { log } from "@/lib/log";
 import { createDownloadUrl, getObjectBuffer } from "@/lib/storage";
 import { notify } from "@/lib/notifications";
 import { setResumeEmbedding } from "@/lib/vector";
@@ -46,7 +47,7 @@ export async function processResume(resumeId: string) {
       href: "/resume",
     });
   } catch (err) {
-    console.error(`Resume ${resumeId} failed to parse`, err);
+    log.error("resume", "parse failed", { resume: resumeId, err });
     await db.resume.update({ where: { id: resumeId }, data: { parseStatus: "FAILED" } });
     return;
   }
@@ -62,6 +63,6 @@ export async function embedResume(resumeId: string, parsed: ParsedResume) {
       .join("\n");
     await setResumeEmbedding(resumeId, await embedText(text));
   } catch (err) {
-    console.error(`Resume ${resumeId} failed to embed`, err);
+    log.error("resume", "embedding failed", { resume: resumeId, err });
   }
 }

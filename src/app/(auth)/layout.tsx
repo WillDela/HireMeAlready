@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="desk grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)]">
       <section className="relative hidden flex-col justify-between overflow-hidden px-12 py-12 lg:flex xl:px-20">
         <div className="text-ink">
-          <Wordmark />
+          <Wordmark variant="horizontal" />
         </div>
 
         <div className="relative max-w-[34rem]">

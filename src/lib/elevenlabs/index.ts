@@ -1,5 +1,7 @@
 // Server-only helpers for the ElevenLabs Agents API. Owner: Stream C.
 
+import { timed } from "@/lib/log";
+
 const API = "https://api.elevenlabs.io/v1";
 
 function apiKey() {
@@ -15,12 +17,15 @@ export function interviewerAgentId() {
 }
 
 export async function elevenLabsFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    ...init,
-    headers: { "xi-api-key": apiKey(), "Content-Type": "application/json", ...init.headers },
+  const method = init.method ?? "GET";
+  return timed("elevenlabs", `${method} ${path.split("?")[0]}`, async () => {
+    const res = await fetch(`${API}${path}`, {
+      ...init,
+      headers: { "xi-api-key": apiKey(), "Content-Type": "application/json", ...init.headers },
+    });
+    if (!res.ok) throw new Error(`ElevenLabs ${method} ${path} failed: ${res.status} ${await res.text()}`);
+    return res.json() as Promise<T>;
   });
-  if (!res.ok) throw new Error(`ElevenLabs ${init.method ?? "GET"} ${path} failed: ${res.status} ${await res.text()}`);
-  return res.json() as Promise<T>;
 }
 
 /** Short-lived URL the browser uses to start one conversation with the interviewer agent. */
