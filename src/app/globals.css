@@ -818,6 +818,13 @@ table {
   }
 }
 
+/* Theme swaps crossfade the old and new page (useTheme in src/lib/prefs.ts). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 350ms;
+  animation-timing-function: var(--ease-out-quint);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
