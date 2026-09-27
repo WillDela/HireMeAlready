@@ -34,10 +34,10 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-manila-edge/50 bg-manila">
+    <header className="sticky top-0 z-30 border-b-2 border-ink bg-page">
       <div className="mx-auto flex h-16 max-w-[76rem] items-center gap-3 px-4 sm:px-6 lg:px-10">
-        <Link href="/dashboard" className="text-ink md:hidden" aria-label="hire-me-already, home">
-          <Wordmark compact />
+        <Link href="/dashboard" className="text-ink md:hidden" aria-label="Hire Me Already, home">
+          <Wordmark variant="vertical" verticalClassName="text-[0.9375rem]" />
         </Link>
 
         <RoleToggle className="ml-auto md:ml-0" />

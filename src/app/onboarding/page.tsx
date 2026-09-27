@@ -113,7 +113,7 @@ export default function OnboardingPage() {
     <div className="desk min-h-dvh">
       <header className="mx-auto flex max-w-3xl items-center justify-between px-4 pt-6 sm:px-6">
         <span className="text-ink">
-          <Wordmark compact />
+          <Wordmark />
         </span>
         <button
           type="button"
