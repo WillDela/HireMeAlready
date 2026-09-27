@@ -6,7 +6,7 @@ function initialsOf(name: string): string {
   return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? "?").slice(0, 2)).toUpperCase();
 }
 
-function toPerson(user: { id: string; name: string }, headline: string | null): PersonSummary {
+export function toPerson(user: { id: string; name: string }, headline: string | null): PersonSummary {
   return { id: user.id, name: user.name, initials: initialsOf(user.name), headline: headline ?? "" };
 }
 

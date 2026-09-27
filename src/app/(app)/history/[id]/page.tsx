@@ -154,14 +154,20 @@ function Analysis({ iv }: { iv: InterviewDetail }) {
 }
 
 function Feedback({ iv }: { iv: InterviewDetail }) {
+  // As the interviewer, this is the feedback you gave the candidate.
+  const byYou = iv.yourRole === "interviewer";
+  const partnerFirst = iv.partner.split(" ")[0];
   if (!iv.feedback) {
     return iv.type === "ai" ? (
       <EmptyFolder title="No interviewer feedback on AI interviews">
         The AI&apos;s scoring is in the AI Analysis tab. Practice with a person to get written feedback from a human.
       </EmptyFolder>
-    ) : iv.yourRole === "interviewer" ? (
-      <EmptyFolder title="You gave the feedback on this one">
-        Feedback you write as an interviewer goes to the candidate&apos;s file.
+    ) : byYou ? (
+      <EmptyFolder
+        title={`You haven't rated ${partnerFirst} yet`}
+        action={<ButtonLink href={`/call/${iv.id}/wrap-up`}>Leave feedback</ButtonLink>}
+      >
+        Your ratings and comments go to {partnerFirst}&apos;s file, and you&apos;ll see them here too.
       </EmptyFolder>
     ) : (
       <EmptyFolder title={`Waiting for ${iv.partner.split(" ")[0]}'s feedback`}>
@@ -179,7 +185,7 @@ function Feedback({ iv }: { iv: InterviewDetail }) {
     <div className="grid gap-8 p-5 sm:p-7 lg:grid-cols-[18rem_minmax(0,1fr)]">
       <section aria-labelledby="ratings">
         <h2 id="ratings" className="text-[1.125rem] font-bold">
-          Ratings from {f.from.split(" ")[0]}
+          {byYou ? `Your ratings for ${partnerFirst}` : `Ratings from ${f.from.split(" ")[0]}`}
         </h2>
         <dl className="mt-4 space-y-4">
           {rows.map(([k, v]) => (
@@ -205,7 +211,7 @@ function Feedback({ iv }: { iv: InterviewDetail }) {
           <blockquote className="text-[1.0625rem] leading-[1.75rem]">{f.comments}</blockquote>
           <figcaption className="mt-2 flex items-center gap-2 text-[0.875rem] font-semibold text-ink-2">
             <Avatar name={f.from} initials={f.from.split(" ").map((p) => p[0]).join("")} size={24} />
-            {f.from}
+            {byYou ? `You, to ${partnerFirst}` : f.from}
           </figcaption>
         </figure>
       </section>
@@ -365,7 +371,7 @@ export default function InterviewDetailPage({ params }: { params: Promise<{ id: 
               { id: "summary", label: "Summary" },
               { id: "transcript", label: "Transcript" },
               { id: "analysis", label: "AI Analysis" },
-              { id: "feedback", label: "Interviewer Feedback" },
+              { id: "feedback", label: iv.yourRole === "interviewer" ? "Your Feedback" : "Interviewer Feedback" },
               { id: "people", label: "People", count: iv.people.length },
             ]}
           >

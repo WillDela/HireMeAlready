@@ -5,27 +5,29 @@ import { Send, UserMinus } from "lucide-react";
 import type { Person } from "@/lib/mock";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Stamp } from "@/components/ui/Stamp";
 
 /**
- * A friend on the roster. Remove asks for confirmation in place; an invite
- * leaves a stamp on the row.
+ * A friend on the roster. Remove asks for confirmation in place. `invite` stands in
+ * for the Invite button while an invite with this friend is open.
  */
 export function FriendRow({
   person,
   meta,
   status,
   onRemove,
+  onInvite,
+  invite,
   actions,
 }: {
   person: Person;
   meta?: ReactNode;
   status?: "online" | "away" | "offline";
   onRemove?: (id: string) => void;
+  onInvite?: () => void;
+  invite?: ReactNode;
   /** Replace the default Invite / Remove pair, e.g. Accept / Decline. */
   actions?: ReactNode;
 }) {
-  const [invited, setInvited] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -53,16 +55,12 @@ export function FriendRow({
             </div>
           ) : (
             <>
-              {invited ? (
-                <Stamp tone="ink" land rotate={-5} className="mr-2 text-[0.8125rem]">
-                  Invited
-                </Stamp>
-              ) : (
+              {invite ?? (
                 <Button
                   variant="secondary"
                   size="sm"
                   icon={<Send size={15} aria-hidden="true" />}
-                  onClick={() => setInvited(true)}
+                  onClick={onInvite}
                   aria-label={`Invite ${person.name} to interview`}
                 >
                   Invite to interview

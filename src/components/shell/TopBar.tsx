@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Bell, FileText, Flag, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { notifications as initialNotifications } from "@/lib/mock";
+import type { Notification } from "@/lib/mock";
+import { apiFetch, useApiResource } from "@/lib/use-api";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { signOut } from "@/lib/auth-client";
 import { Avatar } from "@/components/ui/Avatar";
@@ -17,14 +17,27 @@ import { Wordmark } from "./Wordmark";
 export function TopBar() {
   const currentUser = useCurrentUser();
   const router = useRouter();
-  const [items, setItems] = useState(initialNotifications);
+  // Polls every 30s so new results, feedback and requests show up without a reload.
+  const notifications = useApiResource<Notification[]>("/api/notifications", {
+    pollWhile: () => true,
+    pollMs: 30_000,
+  });
+  const items = notifications.data ?? [];
   const unread = items.filter((n) => n.unread).length;
 
+  /** Marks one notification read (or all, without `id`) right away, then tells the server. */
+  function markRead(id?: string) {
+    notifications.mutate(items.map((n) => (!id || n.id === id ? { ...n, unread: false } : n)));
+    apiFetch<Notification[]>("/api/notifications", { method: "PATCH", body: JSON.stringify({ id }) })
+      .then(notifications.mutate)
+      .catch(() => notifications.reload());
+  }
+
   return (
-    <header className="sticky top-0 z-30 border-b border-manila-edge/50 bg-manila">
+    <header className="sticky top-0 z-30 border-b-2 border-ink bg-page">
       <div className="mx-auto flex h-16 max-w-[76rem] items-center gap-3 px-4 sm:px-6 lg:px-10">
-        <Link href="/dashboard" className="text-ink md:hidden" aria-label="hire-me-already, home">
-          <Wordmark compact />
+        <Link href="/dashboard" className="text-ink md:hidden" aria-label="Hire Me Already, home">
+          <Wordmark variant="vertical" verticalClassName="text-[0.9375rem]" />
         </Link>
 
         <RoleToggle className="ml-auto md:ml-0" />
@@ -57,7 +70,7 @@ export function TopBar() {
                     type="button"
                     className="text-[0.8125rem] font-semibold text-ink-2 underline hover:text-ink disabled:no-underline disabled:opacity-50"
                     disabled={!unread}
-                    onClick={() => setItems((all) => all.map((n) => ({ ...n, unread: false })))}
+                    onClick={() => markRead()}
                   >
                     Mark all read
                   </button>
@@ -72,7 +85,10 @@ export function TopBar() {
                       <li key={n.id}>
                         <Link
                           href={n.href}
-                          onClick={close}
+                          onClick={() => {
+                            if (n.unread) markRead(n.id);
+                            close();
+                          }}
                           className="flex gap-3 px-5 py-3.5 hover:bg-paper-2"
                         >
                           <span

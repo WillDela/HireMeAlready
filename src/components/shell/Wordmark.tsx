@@ -1,28 +1,81 @@
 import { cn } from "@/lib/cn";
 
-/** Typographic mark: the product name as a rubber stamp. */
-export function Wordmark({ compact = false, className }: { compact?: boolean; className?: string }) {
-  if (compact) {
-    return (
-      <span
-        className={cn("stamp text-[0.9375rem]", className)}
-        style={{ ["--r" as string]: "-4deg", padding: "0.3em 0.4em" }}
-        aria-label="hire-me-already"
-        role="img"
-      >
-        HMA
-      </span>
-    );
-  }
+type Variant = "horizontal" | "vertical" | "responsive";
+
+/** The microphone that replaces the "I" in HIRE (README geometry). Height 0.72em, sitting on the baseline. */
+function Mic() {
   return (
-    <span
-      className={cn("stamp flex-col items-start gap-0.5", className)}
-      style={{ ["--r" as string]: "-3deg", padding: "0.45em 0.6em 0.4em" }}
-      aria-label="hire-me-already"
-      role="img"
+    <svg
+      viewBox="0 0 70 100"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="10"
+      strokeLinecap="round"
+      aria-hidden="true"
+      style={{ height: "0.72em", width: "auto", margin: "0 0.05em 0 0.06em", display: "inline-block", verticalAlign: "baseline", overflow: "visible" }}
     >
-      <span className="text-[1.375rem] leading-[0.9] tracking-[0.04em]">Hire me</span>
-      <span className="text-[0.8125rem] leading-none tracking-[0.34em]">already</span>
+      <rect x="25" y="5" width="20" height="46" rx="10" />
+      <path d="M 6 40 V 46 A 29 29 0 0 0 64 46 V 40" />
+      <line x1="35" y1="75" x2="35" y2="95" />
+    </svg>
+  );
+}
+
+const RED = "#E5322D";
+const type = "font-brand font-extrabold uppercase tracking-[-0.035em] whitespace-nowrap";
+
+function Ready() {
+  return (
+    <span className="italic" style={{ color: RED }}>
+      READY
+    </span>
+  );
+}
+
+/**
+ * The wordmark, built to the handoff spec (Montserrat 800, -0.035em, READY in 800 italic #E5322D, mic for
+ * the I). Sized by font-size, so pass a `text-*` class. Ink follows the theme; the red never changes.
+ * The supplied PNGs are cropped at the right edge of the Y, so the live lockup is used instead.
+ */
+export function Wordmark({
+  variant = "responsive",
+  className,
+  horizontalClassName = "text-[2.5rem]",
+  verticalClassName = "text-base",
+}: {
+  variant?: Variant;
+  className?: string;
+  horizontalClassName?: string;
+  verticalClassName?: string;
+}) {
+  return (
+    <span role="img" aria-label="Hire Me Already" className={cn("inline-block text-ink", className)}>
+      {variant !== "horizontal" ? (
+        <span
+          aria-hidden="true"
+          className={cn(type, "block pr-[0.08em] leading-[0.92]", verticalClassName, variant === "responsive" && "sm:hidden")}
+        >
+          <span className="block">
+            H<Mic />
+            RE
+          </span>
+          <span className="block">ME</span>
+          <span className="block">
+            AL
+            <Ready />
+          </span>
+        </span>
+      ) : null}
+      {variant !== "vertical" ? (
+        <span
+          aria-hidden="true"
+          className={cn(type, "block pr-[0.08em] leading-none", horizontalClassName, variant === "responsive" && "hidden sm:block")}
+        >
+          H<Mic />
+          RE ME AL
+          <Ready />
+        </span>
+      ) : null}
     </span>
   );
 }

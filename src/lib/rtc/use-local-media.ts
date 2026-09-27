@@ -157,6 +157,47 @@ export function useLocalMedia() {
   };
 }
 
+/**
+ * Video-only feed of the saved camera for your own tile, e.g. in an AI interview where
+ * nothing is sent. Open while `on`; turning it off releases the camera (and its light).
+ */
+export function useCameraPreview(on: boolean) {
+  const [stream, setStream] = useState<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (!on || !navigator.mediaDevices?.getUserMedia) return;
+    let cancelled = false;
+    let acquired: MediaStream | null = null;
+    const { cameraId } = readDevicePrefs();
+    const open = (video: MediaTrackConstraints | true) => navigator.mediaDevices.getUserMedia({ video, audio: false });
+
+    open(cameraId ? { deviceId: { exact: cameraId } } : true)
+      .catch((err) => {
+        // The saved camera was unplugged: use any camera instead.
+        const name = (err as { name?: string } | null)?.name;
+        if (cameraId && (name === "OverconstrainedError" || name === "NotFoundError")) return open(true);
+        throw err;
+      })
+      .then(
+        (s) => {
+          if (cancelled) return stopAll(s);
+          acquired = s;
+          setStream(s);
+        },
+        // No camera or no permission: the tile shows your initials instead.
+        () => undefined,
+      );
+
+    return () => {
+      cancelled = true;
+      stopAll(acquired);
+      setStream(null);
+    };
+  }, [on]);
+
+  return stream;
+}
+
 /** Live input level of the stream's mic, 0-100, from an analyser on the audio track. */
 export function useMicLevel(stream: MediaStream | null, active: boolean) {
   const [level, setLevel] = useState(0);

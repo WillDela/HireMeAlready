@@ -1,9 +1,11 @@
 "use client";
 
 import { notFound, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { UserX, WifiOff } from "lucide-react";
 import type { IceServersResponse, PeerSession } from "@/lib/contracts";
+import { useDevicePrefs } from "@/lib/rtc/device-prefs";
+import { uploadRecording, useMicRecorder } from "@/lib/rtc/use-mic-recorder";
 import { usePeerCall } from "@/lib/rtc/use-peer-call";
 import { apiFetch, useApiResource } from "@/lib/use-api";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
@@ -65,8 +67,12 @@ function PeerRoom({ session }: { session: PeerSession }) {
     isCaller: session.isCaller,
     iceServers: turn.data?.iceServers ?? null,
   });
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(true);
+  // Start muted / camera off if that's how you left the lobby.
+  const devicePrefs = useDevicePrefs();
+  const [micToggle, setMicOn] = useState<boolean | null>(null);
+  const [cameraToggle, setCameraOn] = useState<boolean | null>(null);
+  const micOn = micToggle ?? devicePrefs.micOn;
+  const cameraOn = cameraToggle ?? devicePrefs.cameraOn;
   // Closed by default on small screens. PeerRoom only renders client-side, after the session loads.
   const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia("(max-width: 1023px)").matches);
   const [reportOpen, setReportOpen] = useState(false);
@@ -83,6 +89,8 @@ function PeerRoom({ session }: { session: PeerSession }) {
     !leaving && (call.state === "ended" || session.status === "COMPLETED" || session.status === "ABANDONED");
   const elapsed = useElapsed(connected && !partnerGone);
   const panelId = "candidate-file";
+  // Your side of the transcript. Each of you records only your own mic.
+  const recorder = useMicRecorder(call.localStream, connected && currentUser.recordingConsent);
 
   // The first connection starts the interview for both of us.
   useEffect(() => {
@@ -104,16 +112,29 @@ function PeerRoom({ session }: { session: PeerSession }) {
     call.localStream?.getVideoTracks().forEach((t) => (t.enabled = cameraOn));
   }, [call.localStream, cameraOn]);
 
+  // Stop recording before the mic is released, then upload in the background: it carries
+  // on after we navigate to the wrap-up. Only the first call has anything to upload.
+  const { stop: stopRecording } = recorder;
+  const saveRecording = useCallback(() => {
+    stopRecording()
+      .then((recording) => recording && uploadRecording(interviewId, recording))
+      .catch((err) => console.error("Couldn't save your side of the transcript:", err));
+  }, [stopRecording, interviewId]);
+
   // Once they've gone, release the camera and mic.
   const { hangUp } = call;
   useEffect(() => {
-    if (partnerGone) hangUp();
-  }, [partnerGone, hangUp]);
-
-  async function leave(to = "/dashboard") {
-    setLeaving(true);
+    if (!partnerGone) return;
+    saveRecording();
     hangUp();
-    // TODO(PR 2): go to /call/{id}/wrap-up once the wrap-up and feedback routes land.
+  }, [partnerGone, saveRecording, hangUp]);
+
+  // After a real conversation, both of you go to the wrap-up: the interviewer rates the
+  // candidate there. A call that never connected has nothing to wrap up.
+  async function leave(to = everConnected ? `/call/${interviewId}/wrap-up` : "/dashboard") {
+    setLeaving(true);
+    saveRecording();
+    hangUp();
     await apiFetch(`/api/interviews/${interviewId}/peer`, {
       method: "PATCH",
       body: JSON.stringify({ event: "left" }),
@@ -141,6 +162,13 @@ function PeerRoom({ session }: { session: PeerSession }) {
     <div className="surface-night flex h-dvh flex-col">
       <title>{`In interview · ${partner.name}`}</title>
       <header className="flex h-14 flex-none items-center gap-3 px-4 sm:px-5">
+        {recorder.recording ? (
+          <span className="stamp flex-none text-[0.6875rem] text-stamp" style={{ ["--r" as string]: "-3deg" }}>
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-stamp motion-safe:animate-[blink_1.6s_ease-in-out_infinite]" />
+            Rec
+            <span className="visually-hidden"> Recording your mic for the transcript</span>
+          </span>
+        ) : null}
         <h1 className="min-w-0 truncate text-[0.9375rem] font-semibold">
           Interview with {partner.name}
           {place ? <span className="hidden text-ink-2 sm:inline"> · {place}</span> : null}
@@ -157,9 +185,11 @@ function PeerRoom({ session }: { session: PeerSession }) {
         <main id="main" className="relative min-w-0 flex-1 px-3 pb-2 sm:px-4">
           <VideoTile stream={call.remoteStream} name={partner.name} initials={partner.initials} className="h-full w-full" />
 
-          <div className="absolute right-6 bottom-5 w-24 shadow-[0_12px_28px_-10px_oklch(0.03_0.02_266/0.8)] sm:right-8 sm:bottom-6 sm:w-52">
+          {/* Above the status overlays, so you can check your camera while waiting. */}
+          <div className="absolute right-6 bottom-5 z-10 w-24 shadow-[0_12px_28px_-10px_oklch(0.03_0.02_266/0.8)] sm:right-8 sm:bottom-6 sm:w-52">
             <VideoTile
-              stream={call.localStream}
+              // Once the call ends or fails the camera is released: show initials, not a black frame.
+              stream={partnerGone || call.state === "failed" ? null : call.localStream}
               name={currentUser.name}
               initials={currentUser.initials}
               self
@@ -233,8 +263,8 @@ function PeerRoom({ session }: { session: PeerSession }) {
         <CallControls
           micOn={micOn}
           cameraOn={cameraOn}
-          onToggleMic={() => setMicOn((v) => !v)}
-          onToggleCamera={() => setCameraOn((v) => !v)}
+          onToggleMic={() => setMicOn(!micOn)}
+          onToggleCamera={() => setCameraOn(!cameraOn)}
           onReport={() => setReportOpen(true)}
           onEnd={() => setEndOpen(true)}
           endLabel="Leave"
@@ -242,7 +272,7 @@ function PeerRoom({ session }: { session: PeerSession }) {
         />
       </footer>
 
-      <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} subject={partner.name} onLeave={() => leave()} />
+      <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} subject={partner.name} onLeave={() => leave()} interviewId={interviewId} />
 
       <Dialog
         open={endOpen}

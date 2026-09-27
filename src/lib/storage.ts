@@ -1,5 +1,6 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { timed } from "@/lib/log";
 
 // DigitalOcean Spaces (S3-compatible). The browser uploads straight to Spaces with a
 // presigned PUT, so the bucket needs a CORS rule allowing PUT from our origins.
@@ -42,13 +43,16 @@ export async function createDownloadUrl(storageKey: string) {
 
 /** Reads an object into memory (resumes and call recordings are small enough). */
 export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
-  const res = await s3.send(new GetObjectCommand({ Bucket: bucket(), Key: storageKey }));
-  if (!res.Body) throw new Error(`Empty object: ${storageKey}`);
-  return Buffer.from(await res.Body.transformToByteArray());
+  return timed("storage", "download", async () => {
+    const res = await s3.send(new GetObjectCommand({ Bucket: bucket(), Key: storageKey }));
+    if (!res.Body) throw new Error(`Empty object: ${storageKey}`);
+    return Buffer.from(await res.Body.transformToByteArray());
+  }, { key: storageKey });
 }
 
 export const storageKeys = {
   resume: (userId: string, resumeId: string) => `resumes/${userId}/${resumeId}.pdf`,
-  recording: (interviewId: string, participantId: string, ext: string) =>
-    `recordings/${interviewId}/${participantId}.${ext}`,
+  // Keyed by recording, not participant: rejoining a call starts a second recording.
+  recording: (interviewId: string, recordingId: string, ext: string) =>
+    `recordings/${interviewId}/${recordingId}.${ext}`,
 };

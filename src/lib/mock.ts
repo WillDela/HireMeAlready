@@ -836,35 +836,6 @@ export const peopleDirectory: (Person & { mutual: number })[] = [
   { id: "u_ravi", name: "Ravi Iyer", initials: "RI", headline: "Product manager · logistics", mutual: 1 },
 ];
 
-export interface InterviewInvite {
-  id: string;
-  from: Person;
-  /** The role *you* would play if you accept. */
-  yourRole: Role;
-  company: string;
-  jobTitle: string;
-  sent: string;
-}
-
-export const interviewInvites: InterviewInvite[] = [
-  {
-    id: "inv_1",
-    from: { id: "u_jordan", name: "Jordan Blake", initials: "JB", headline: "UX designer · applying to fintech" },
-    yourRole: "interviewer",
-    company: "Kestrel Bank",
-    jobTitle: "Senior UX Designer",
-    sent: "1h ago",
-  },
-  {
-    id: "inv_2",
-    from: { id: "u_mei", name: "Mei Lin", initials: "ML", headline: "Frontend engineer · 6 years" },
-    yourRole: "interviewee",
-    company: "Tessellate",
-    jobTitle: "Design Systems Lead",
-    sent: "Yesterday",
-  },
-];
-
 /* ------------------------------------------------------------------ */
 /* Admin reports                                                       */
 /* ------------------------------------------------------------------ */
