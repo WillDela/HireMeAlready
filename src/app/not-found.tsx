@@ -7,7 +7,7 @@ export default function NotFound() {
       <div className="sheet w-full max-w-lg">
         <EmptyFolder
           title="There's no file with that name"
-          action={<ButtonLink href="/dashboard">Back to Home</ButtonLink>}
+          action={<ButtonLink href="/practice">Back to Home</ButtonLink>}
         >
           The link may be old, or the interview was deleted along with its recording.
         </EmptyFolder>

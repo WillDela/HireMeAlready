@@ -37,10 +37,10 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #14120f;
-  --manila: #f2e9d8;
-  --manila-deep: #e8dcc4;
-  --manila-edge: #b9a880;
-  --manila-ink: #5a3e1e;
+  --manila: #43392c;
+  --manila-deep: #3a3126;
+  --manila-edge: #6e5a3c;
+  --manila-ink: #d9c7a4;
   --paper: #1e1b18;
   --paper-2: #2a2622;
   --rule: #34302a;
@@ -66,10 +66,10 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --page: #14120f;
-    --manila: #f2e9d8;
-    --manila-deep: #e8dcc4;
-    --manila-edge: #b9a880;
-    --manila-ink: #5a3e1e;
+    --manila: #43392c;
+    --manila-deep: #3a3126;
+    --manila-edge: #6e5a3c;
+    --manila-ink: #d9c7a4;
     --paper: #1e1b18;
     --paper-2: #2a2622;
     --rule: #34302a;
@@ -816,6 +816,13 @@ table {
   50% {
     opacity: 0.35;
   }
+}
+
+/* Theme swaps crossfade the old and new page (useTheme in src/lib/prefs.ts). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 350ms;
+  animation-timing-function: var(--ease-out-quint);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -16,7 +16,7 @@ export function Sidebar() {
   return (
     <aside className="surface-drawer sticky top-0 hidden h-dvh w-60 flex-none flex-col bg-drawer md:flex">
       <div className="px-6 pt-7 pb-8">
-        <Link href="/dashboard" className="inline-block" aria-label="Hire Me Already, home">
+        <Link href="/practice" className="inline-block" aria-label="Hire Me Already, home">
           <Wordmark variant="vertical" verticalClassName="text-[2rem]" />
         </Link>
       </div>

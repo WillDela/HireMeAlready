@@ -56,7 +56,7 @@ export function AuthForm({ mode, oauthError }: { mode: "login" | "signup"; oauth
     }
     // Read at submit time rather than via useSearchParams, which would need a Suspense boundary.
     const next = safeRedirect(new URLSearchParams(window.location.search).get("next"));
-    router.push(next ?? (isSignup ? "/onboarding" : "/dashboard"));
+    router.push(next ?? (isSignup ? "/onboarding" : "/practice"));
     router.refresh();
   }
 
@@ -73,7 +73,7 @@ export function AuthForm({ mode, oauthError }: { mode: "login" | "signup"; oauth
     // instead of creating a user, so newUserCallbackURL never fires.
     const { error } = await signIn.social({
       provider: "google",
-      callbackURL: next ?? (isSignup ? "/onboarding" : "/dashboard"),
+      callbackURL: next ?? (isSignup ? "/onboarding" : "/practice"),
       newUserCallbackURL: next ?? "/onboarding",
       errorCallbackURL,
     });

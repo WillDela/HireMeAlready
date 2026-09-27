@@ -371,16 +371,17 @@ model Notification {
 // One row per user, upserted on join. Rows are matched under FOR UPDATE row locks
 // in src/lib/matching.ts.
 model QueueEntry {
-  id          String        @id @default(cuid())
-  userId      String        @unique
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role        InterviewRole
-  status      QueueStatus   @default(WAITING)
-  jobTitle    String?
-  company     String? // interviewees only; copied onto the matched Interview
-  interviewId String? // set on MATCHED; the partner picks it up on its next poll
-  lastSeenAt  DateTime      @default(now()) // heartbeat; entries stale for >15s are never matched
-  createdAt   DateTime      @default(now())
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           InterviewRole
+  status         QueueStatus   @default(WAITING)
+  jobTitle       String?
+  company        String? // interviewees only; copied onto the matched Interview
+  jobDescription String? // interviewees only; copied onto the matched Interview
+  interviewId    String? // set on MATCHED; the partner picks it up on its next poll
+  lastSeenAt     DateTime      @default(now()) // heartbeat; entries stale for >15s are never matched
+  createdAt      DateTime      @default(now())
 
   @@index([status, role, createdAt])
   @@map("queue_entry")

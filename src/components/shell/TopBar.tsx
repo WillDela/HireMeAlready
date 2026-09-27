@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, FileText, Flag, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Notification } from "@/lib/mock";
@@ -12,11 +12,17 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Popover } from "@/components/ui/Popover";
 import { EmptyFolder } from "@/components/ui/States";
 import { RoleToggle } from "./RoleToggle";
+import { ThemeToggle } from "./ThemeToggle";
 import { Wordmark } from "./Wordmark";
+
+// Pages where interviewee vs interviewer changes nothing, so the role toggle is hidden.
+const NO_ROLE_TOGGLE = ["/friends", "/resume", "/settings"];
 
 export function TopBar() {
   const currentUser = useCurrentUser();
   const router = useRouter();
+  const pathname = usePathname();
+  const showRoleToggle = !NO_ROLE_TOGGLE.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   // Polls every 30s so new results, feedback and requests show up without a reload.
   const notifications = useApiResource<Notification[]>("/api/notifications", {
     pollWhile: () => true,
@@ -36,13 +42,14 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b-2 border-ink bg-page">
       <div className="mx-auto flex h-16 max-w-[76rem] items-center gap-3 px-4 sm:px-6 lg:px-10">
-        <Link href="/dashboard" className="text-ink md:hidden" aria-label="Hire Me Already, home">
+        <Link href="/practice" className="text-ink md:hidden" aria-label="Hire Me Already, home">
           <Wordmark variant="vertical" verticalClassName="text-[0.9375rem]" />
         </Link>
 
-        <RoleToggle className="ml-auto md:ml-0" />
+        {showRoleToggle ? <RoleToggle className="ml-auto md:ml-0" /> : null}
 
-        <div className="flex items-center gap-1 md:ml-auto">
+        <div className={cn("flex items-center gap-1", showRoleToggle ? "md:ml-auto" : "ml-auto")}>
+          <ThemeToggle />
           <Popover
             buttonLabel={unread ? `Notifications, ${unread} unread` : "Notifications"}
             panelLabel="Notifications"

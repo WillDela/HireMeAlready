@@ -105,7 +105,7 @@ export default function OnboardingPage() {
       return;
     }
     setRole(role);
-    router.push("/dashboard");
+    router.push("/practice");
     router.refresh();
   }
 

@@ -38,6 +38,7 @@ export async function joinQueue(userId: string, input: JoinQueueInput) {
     // Interviewers don't pick a role to practice for; the interviewee's entry names it.
     jobTitle: input.role === "INTERVIEWEE" ? input.jobTitle || null : null,
     company: input.role === "INTERVIEWEE" ? input.company || null : null,
+    jobDescription: input.role === "INTERVIEWEE" ? input.jobDescription || null : null,
     interviewId: null,
     createdAt: now,
     lastSeenAt: now,
@@ -163,13 +164,20 @@ export async function touchMatch(userId: string, interviewId: string) {
   });
 }
 
-type EntryRow = { id: string; userId: string; role: Role; jobTitle: string | null; company: string | null };
+type EntryRow = {
+  id: string;
+  userId: string;
+  role: Role;
+  jobTitle: string | null;
+  company: string | null;
+  jobDescription: string | null;
+};
 
 /** Matches a WAITING user with someone in the opposite role. Returns the new interview's id. */
 export async function tryMatch(userId: string): Promise<string | null> {
   return db.$transaction(async (tx) => {
     const [me] = await tx.$queryRaw<EntryRow[]>`
-      SELECT id, "userId", role, "jobTitle", company FROM queue_entry
+      SELECT id, "userId", role, "jobTitle", company, "jobDescription" FROM queue_entry
       WHERE "userId" = ${userId} AND status = 'WAITING'
     `;
     if (!me) return null;
@@ -177,7 +185,7 @@ export async function tryMatch(userId: string): Promise<string | null> {
     // Closest resume first (pgvector cosine distance), then first come, first served.
     // Anyone without an embedding sorts last.
     const [partner] = await tx.$queryRaw<EntryRow[]>`
-      SELECT q.id, q."userId", q.role, q."jobTitle", q.company
+      SELECT q.id, q."userId", q.role, q."jobTitle", q.company, q."jobDescription"
       FROM queue_entry q
       LEFT JOIN profile p ON p."userId" = q."userId"
       LEFT JOIN resume r ON r.id = p."activeResumeId"
@@ -206,7 +214,12 @@ export async function tryMatch(userId: string): Promise<string | null> {
 
     const interviewee = me.role === "INTERVIEWEE" ? me : partner;
     const interview = await tx.interview.create({
-      data: { mode: "PEER", jobTitle: interviewee.jobTitle, company: interviewee.company },
+      data: {
+        mode: "PEER",
+        jobTitle: interviewee.jobTitle,
+        company: interviewee.company,
+        jobDescription: interviewee.jobDescription,
+      },
     });
     await tx.participant.createMany({
       data: [me, partner].map((e) => ({
@@ -261,7 +274,7 @@ async function activeResumeSkills(userId: string) {
 
 /**
  * Background job (run through `after()` right after a match): suggested questions for
- * the interviewer's side panel, from the interviewee's resume and target role.
+ * the interviewer's side panel, from the interviewee's resume, target role and job description.
  */
 export async function prepareSuggestedQuestions(interviewId: string) {
   try {
@@ -278,6 +291,7 @@ export async function prepareSuggestedQuestions(interviewId: string) {
       resume,
       jobTitle: interview.jobTitle || profile?.targetRole || resume.targetRole || "a role in their field",
       company: interview.company ?? undefined,
+      jobDescription: interview.jobDescription ?? undefined,
       grounded: false,
       count: SUGGESTED_QUESTIONS,
     });

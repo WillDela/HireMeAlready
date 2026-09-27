@@ -31,7 +31,7 @@ export default function FriendsPage() {
   });
   const [inviting, setInviting] = useState<PersonSummary | null>(null);
 
-  // Deep links from notifications and the dashboard: /friends?tab=requests
+  // Deep links from notifications: /friends?tab=requests
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t === "requests" || t === "find") setTab(t);

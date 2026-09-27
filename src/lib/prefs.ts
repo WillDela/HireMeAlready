@@ -61,10 +61,16 @@ export function useTheme(): [ThemeChoice, (t: ThemeChoice) => void] {
   return [
     theme,
     (next) => {
-      setTheme(next);
-      const root = document.documentElement;
-      if (next === "system") root.removeAttribute("data-theme");
-      else root.setAttribute("data-theme", next);
+      const apply = () => {
+        setTheme(next);
+        const root = document.documentElement;
+        if (next === "system") root.removeAttribute("data-theme");
+        else root.setAttribute("data-theme", next);
+      };
+      // Crossfade the whole page instead of snapping (see ::view-transition in globals.css).
+      // Browsers without view transitions, and reduced-motion users, get the instant swap.
+      if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) apply();
+      else document.startViewTransition(apply);
     },
   ];
 }
