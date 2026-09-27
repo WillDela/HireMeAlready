@@ -9,6 +9,7 @@ import {
   type TranscriptLine,
 } from "@/lib/contracts";
 import { client, geminiEmbedModel, geminiModel, parseJsonResponse, toResponseSchema, withRetry } from "@/lib/gemini/client";
+import { log } from "@/lib/log";
 import { type ScrapedPage, scrapeSearch } from "@/lib/scrape";
 
 // Owner: Stream C. Model names come from GEMINI_MODEL and GEMINI_EMBED_MODEL.
@@ -22,7 +23,7 @@ const RESUME_PROMPT = `Extract this resume into the JSON schema.
 - Omit optional fields you can't find.`;
 
 export async function parseResume(pdf: Buffer): Promise<ParsedResume> {
-  const response = await withRetry(() =>
+  const response = await withRetry("parseResume", () =>
     client().models.generateContent({
       model: geminiModel(),
       contents: createUserContent([
@@ -37,7 +38,7 @@ export async function parseResume(pdf: Buffer): Promise<ParsedResume> {
 
 /** 768-dimensional embedding (gemini-embedding-001 with outputDimensionality 768). */
 export async function embedText(text: string): Promise<number[]> {
-  const response = await withRetry(() =>
+  const response = await withRetry("embedText", () =>
     client().models.embedContent({
       model: geminiEmbedModel(),
       contents: text,
@@ -129,7 +130,7 @@ async function researchCompany(company: string, jobTitle: string): Promise<Compa
   ).filter((p) => normalize(p.text).includes(companyName));
   if (pages.length === 0) return { reported: [], facts: [] };
 
-  const res = await withRetry(() =>
+  const res = await withRetry("researchCompany", () =>
     client().models.generateContent({
       model: geminiModel(),
       contents: extractPrompt(company, jobTitle, pages),
@@ -226,11 +227,11 @@ export async function generateQuestions(input: GenerateQuestionsInput): Promise<
     try {
       research = await researchCompany(input.company, input.jobTitle);
     } catch (err) {
-      console.error(`Question research for ${input.company} failed; writing questions without it`, err);
+      log.warn("gemini", "company research failed; writing questions without it", { company: input.company, err });
     }
   }
 
-  const res = await withRetry(() =>
+  const res = await withRetry("generateQuestions", () =>
     client().models.generateContent({
       model: geminiModel(),
       contents: questionsPrompt(input, research),
@@ -258,7 +259,7 @@ export type TranscribedSegment = { startMs: number; endMs: number; text: string 
 const TranscribedSegments = z.array(z.object({ startMs: z.int(), endMs: z.int(), text: z.string() }));
 
 export async function transcribeAudio(audio: Buffer, mimeType: string): Promise<TranscribedSegment[]> {
-  const response = await withRetry(() =>
+  const response = await withRetry("transcribeAudio", () =>
     client().models.generateContent({
       model: geminiModel(),
       contents: createUserContent([
@@ -295,7 +296,7 @@ export async function analyzeInterview(input: AnalyzeInterviewInput): Promise<An
     .filter(Boolean)
     .join("\n\n");
 
-  const response = await withRetry(() =>
+  const response = await withRetry("analyzeInterview", () =>
     client().models.generateContent({
       model: geminiModel(),
       contents: prompt,

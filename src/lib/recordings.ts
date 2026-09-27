@@ -2,6 +2,7 @@ import { HttpError } from "@/lib/api";
 import type { RecordingUploadInput, RecordingUploadResponse } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/interviews";
+import { log } from "@/lib/log";
 import { finalizeInterview } from "@/lib/pipeline/finalize";
 import { createUploadUrl, storageKeys } from "@/lib/storage";
 
@@ -49,6 +50,7 @@ export async function confirmRecording(interviewId: string, userId: string, reco
     data: { status: "READY" },
   });
   if (count === 0) throw new HttpError(404, "Recording not found");
+  log.info("recordings", "upload confirmed", { interview: interviewId, recording: recordingId });
 }
 
 /**
@@ -57,13 +59,21 @@ export async function confirmRecording(interviewId: string, userId: string, reco
  */
 export async function finalizeWhenRecorded(interviewId: string) {
   const deadline = Date.now() + PARTNER_WAIT_MS;
-  while (Date.now() < deadline && !(await allRecorded(interviewId))) await sleep(PARTNER_POLL_MS);
+  let complete = false;
+  while (!(complete = await allRecorded(interviewId)) && Date.now() < deadline) await sleep(PARTNER_POLL_MS);
+  if (!complete) {
+    log.warn("recordings", "partner's recording never arrived; transcribing what we have", {
+      interview: interviewId,
+      waitedMs: PARTNER_WAIT_MS,
+    });
+  }
 
   const { count } = await db.interview.updateMany({
     where: { id: interviewId, transcriptStatus: "PENDING" },
     data: { transcriptStatus: "PROCESSING" },
   });
   if (count > 0) await finalizeInterview(interviewId);
+  else log.debug("recordings", "already finalizing on the other side's upload", { interview: interviewId });
 }
 
 async function allRecorded(interviewId: string) {
