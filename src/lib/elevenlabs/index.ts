@@ -43,3 +43,12 @@ export function getConversation(conversationId: string) {
   return elevenLabsFetch<ElevenLabsConversation>(`/convai/conversations/${conversationId}`);
 }
 
+/**
+ * Single-use token the browser opens one Scribe realtime (speech-to-text) session with,
+ * so the API key never leaves the server. Needs the key's speech_to_text permission.
+ */
+export async function createScribeToken(): Promise<string> {
+  const { token } = await elevenLabsFetch<{ token: string }>("/single-use-token/realtime_scribe", { method: "POST" });
+  return token;
+}
+

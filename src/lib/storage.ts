@@ -49,7 +49,6 @@ export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
 
 export const storageKeys = {
   resume: (userId: string, resumeId: string) => `resumes/${userId}/${resumeId}.pdf`,
-  // Keyed by recording, not participant: rejoining a call starts a second recording.
-  recording: (interviewId: string, recordingId: string, ext: string) =>
-    `recordings/${interviewId}/${recordingId}.${ext}`,
+  recording: (interviewId: string, participantId: string, ext: string) =>
+    `recordings/${interviewId}/${participantId}.${ext}`,
 };
