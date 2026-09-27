@@ -4,6 +4,7 @@ import { type JoinQueueInput, type MatchPartner, ParsedResume, type QueueState, 
 import { db } from "@/lib/db";
 import { generateQuestions } from "@/lib/gemini";
 import { closeInvite, inviteExpired } from "@/lib/invitations";
+import { log } from "@/lib/log";
 import { initialsFor, questionSource } from "@/lib/views";
 
 // Live matching. Everyone in line polls GET /api/queue every ~2s; each poll is a
@@ -293,6 +294,6 @@ export async function prepareSuggestedQuestions(interviewId: string) {
       skipDuplicates: true,
     });
   } catch (err) {
-    console.error(`Interview ${interviewId}: suggested questions failed`, err);
+    log.error("matching", "suggested questions failed", { interview: interviewId, err });
   }
 }

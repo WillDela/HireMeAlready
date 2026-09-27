@@ -2,6 +2,8 @@
 // DuckDuckGo's HTML endpoint needs no API key; pages are fetched directly and reduced
 // to plain text. Everything fails soft: a blocked search or page just yields less.
 
+import { log } from "@/lib/log";
+
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 const MAX_HTML_BYTES = 3 * 1024 * 1024;
@@ -58,7 +60,7 @@ export async function searchWeb(query: string, limit = 8): Promise<SearchResult[
     }
     return results;
   } catch (err) {
-    console.error(`Web search failed for "${query}"`, err);
+    log.warn("scrape", "web search failed", { query, err });
     return [];
   }
 }

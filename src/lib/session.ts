@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { setRequestUser } from "@/lib/log";
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -11,6 +12,7 @@ export class UnauthorizedError extends Error {
 /** Current signed-in user, or null. Use in Server Components and Route Handlers. */
 export async function getUser() {
   const session = await auth.api.getSession({ headers: await headers() });
+  if (session) setRequestUser(session.user.id);
   return session?.user ?? null;
 }
 

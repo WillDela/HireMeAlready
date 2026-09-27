@@ -1,5 +1,6 @@
 import type { NotificationKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { log } from "@/lib/log";
 import type { Notification } from "@/lib/mock";
 import { timeAgo } from "@/lib/views";
 
@@ -20,7 +21,7 @@ export async function notify(
   try {
     await db.notification.create({ data: { userId, ...n } });
   } catch (err) {
-    console.error(`Failed to notify ${userId} (${n.kind})`, err);
+    log.error("notify", "failed to save notification", { to: userId, kind: n.kind, err });
   }
 }
 
