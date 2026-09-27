@@ -17,7 +17,6 @@ import { Wordmark } from "@/components/shell/Wordmark";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 import { LoadingSheets } from "@/components/ui/States";
-import { StatePreview } from "@/components/ui/StatePreview";
 
 const steps = ["Upload resume", "Check the details", "Default role"];
 
@@ -351,7 +350,6 @@ export default function OnboardingPage() {
           </div>
         </div>
       </main>
-      <StatePreview className="fixed right-3 bottom-3 z-40" />
     </div>
   );
 }

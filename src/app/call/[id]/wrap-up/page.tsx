@@ -17,7 +17,6 @@ import { ButtonLink } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Stamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned } from "@/components/ui/States";
-import { StatePreview } from "@/components/ui/StatePreview";
 import { PeerWrapUp } from "./PeerWrapUp";
 
 const processingSteps = ["Transcribing the recording", "Scoring your answers", "Writing your feedback"];
@@ -132,7 +131,7 @@ function Processing({ historyId, step, hold }: { historyId: string; step: number
   );
 }
 
-/** The prototype's interviewer form: pretends to send, and follows the State preview. */
+/** The prototype's interviewer form: pretends to send, and follows `?state=`. */
 function MockInterviewerFeedback({ historyId }: { historyId: string }) {
   const forced = useForcedState();
   const [phase, setPhase] = useState<"form" | "sending" | "sent">("form");
@@ -219,7 +218,6 @@ function SessionWrapUp({ id, session, isMock }: { id: string; session: CallSessi
       ) : (
         <LiveProcessing id={id} hold={forced === "loading"} />
       )}
-      <StatePreview className="fixed right-3 bottom-3 z-40" />
     </>
   );
 }

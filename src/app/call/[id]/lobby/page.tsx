@@ -9,7 +9,6 @@ import { useCallSession } from "@/lib/use-call-session";
 import { DeviceCheck, type Permission } from "@/components/call/DeviceCheck";
 import { TypeTag } from "@/components/InterviewTable";
 import { Spinner } from "@/components/ui/Spinner";
-import { StatePreview } from "@/components/ui/StatePreview";
 
 export default function LobbyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -64,7 +63,6 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
           joinLabel={session.type === "ai" ? "Join and start the interview" : "Join call"}
         />
       </main>
-      <StatePreview className="fixed right-3 bottom-3 z-40" />
     </div>
   );
 }

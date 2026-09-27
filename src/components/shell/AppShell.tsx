@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { StatePreview } from "@/components/ui/StatePreview";
 import { MobileTabBar, Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -21,7 +20,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
       <MobileTabBar />
-      <StatePreview className="fixed right-3 bottom-[5.25rem] z-40 md:right-6 md:bottom-6" />
     </div>
   );
 }

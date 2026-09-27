@@ -1,5 +1,4 @@
 import { Wordmark } from "@/components/shell/Wordmark";
-import { StatePreview } from "@/components/ui/StatePreview";
 import { Stamp } from "@/components/ui/Stamp";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -42,7 +41,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="sheet px-6 py-8 sm:px-9 sm:py-10">{children}</div>
         </div>
       </main>
-      <StatePreview className="fixed right-3 bottom-3 z-40" />
     </div>
   );
 }

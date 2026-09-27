@@ -20,7 +20,7 @@ import { VideoTile } from "./VideoTile";
 
 export type { Permission };
 
-/** Rows shown when a state is forced for review (see StatePreview). */
+/** Rows shown when a state is forced for review (via `?state=`). */
 const FORCED_ROWS: Record<Permission, DeviceStatus> = {
   checking: "checking",
   granted: "ok",

@@ -20,7 +20,6 @@ import { VideoTile } from "@/components/call/VideoTile";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Spinner } from "@/components/ui/Spinner";
-import { StatePreview } from "@/components/ui/StatePreview";
 import { PeerCall } from "./PeerCall";
 
 function useElapsed(running: boolean) {
@@ -269,8 +268,6 @@ function CallRoom({ id, session, live }: { id: string; session: CallSession; liv
           </Button>
         </div>
       </Dialog>
-
-      <StatePreview className="fixed bottom-5 left-4 z-20 hidden md:block" />
     </div>
   );
 }

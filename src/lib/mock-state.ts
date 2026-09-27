@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 /**
  * Simulated data loading for the prototype. Every screen resolves to one of
- * four states; `?state=loading|empty|error` (or the State preview control)
+ * four states; `?state=loading|empty|error`
  * forces one so each can be reviewed.
  */
 export type Status = "loading" | "ready" | "empty" | "error";
