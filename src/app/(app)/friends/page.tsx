@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Search, UserPlus } from "lucide-react";
-import type { FriendsResponse, PersonSearchResult } from "@/lib/contracts";
+import { ArrowRight, Search, UserPlus } from "lucide-react";
+import type { FriendsResponse, InvitationsResponse, PersonSearchResult, PersonSummary } from "@/lib/contracts";
 import { apiFetch, useApiResource } from "@/lib/use-api";
 import { FriendRow } from "@/components/FriendRow";
-import { Button } from "@/components/ui/Button";
+import { InviteDialog } from "@/components/InviteDialog";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { FolderTabs } from "@/components/ui/FolderTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Stamp } from "@/components/ui/Stamp";
@@ -23,6 +24,12 @@ export default function FriendsPage() {
   const { status, data, retry, mutate } = useApiResource<FriendsResponse>("/api/friends", {
     isEmpty: (d) => d.friends.length === 0 && d.incoming.length === 0,
   });
+  // Poll while an invite we sent is unanswered, so an accept shows up as "Join lobby".
+  const invites = useApiResource<InvitationsResponse>("/api/invitations", {
+    pollWhile: (d) => d.outgoing.some((i) => i.status === "PENDING"),
+    pollMs: 5000,
+  });
+  const [inviting, setInviting] = useState<PersonSummary | null>(null);
 
   // Deep links from notifications and the dashboard: /friends?tab=requests
   useEffect(() => {
@@ -75,6 +82,56 @@ export default function FriendsPage() {
       });
       mutate(next);
     });
+  }
+
+  function cancelInvite(inviteId: string) {
+    return withBusy(inviteId, async () => {
+      const next = await apiFetch<InvitationsResponse>(`/api/invitations/${inviteId}`, { method: "DELETE" });
+      invites.mutate(next);
+    });
+  }
+
+  /** What stands in for the Invite button while an invite with `friendId` is open. */
+  function inviteState(friendId: string, firstName: string) {
+    const sent = invites.data?.outgoing.find((i) => i.person.id === friendId);
+    const received = invites.data?.incoming.find((i) => i.person.id === friendId);
+    if (sent?.status === "ACCEPTED") {
+      return (
+        <ButtonLink href={`/call/${sent.interviewId}/lobby`} size="sm" icon={<ArrowRight size={15} aria-hidden="true" />}>
+          {firstName} accepted. Join the lobby
+        </ButtonLink>
+      );
+    }
+    if (sent) {
+      return (
+        <>
+          <Stamp tone="ink" land rotate={-5} className="mr-2 text-[0.8125rem]">
+            Invited
+          </Stamp>
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={busy[sent.id]}
+            aria-label={`Cancel your interview invite to ${firstName}`}
+            onClick={() => cancelInvite(sent.id)}
+          >
+            Cancel invite
+          </Button>
+        </>
+      );
+    }
+    if (received) {
+      return (
+        <ButtonLink
+          href={received.status === "ACCEPTED" ? `/call/${received.interviewId}/lobby` : "/practice#invitations"}
+          variant="secondary"
+          size="sm"
+        >
+          {received.status === "ACCEPTED" ? "Back to the lobby" : `Answer ${firstName}'s invite`}
+        </ButtonLink>
+      );
+    }
+    return null;
   }
 
   function sendRequest(userId: string) {
@@ -138,6 +195,8 @@ export default function FriendsPage() {
                     person={f}
                     meta={f.sharedInterviews ? `${f.sharedInterviews} ${f.sharedInterviews === 1 ? "interview" : "interviews"} together` : "No interviews together yet"}
                     onRemove={() => removeFriendship(f.friendshipId)}
+                    onInvite={() => setInviting(f)}
+                    invite={inviteState(f.id, f.name.split(" ")[0])}
                   />
                 ))}
               </ul>
@@ -282,6 +341,8 @@ export default function FriendsPage() {
           ) : null}
         </StateView>
       </FolderTabs>
+
+      <InviteDialog person={inviting} onClose={() => setInviting(null)} onSent={invites.mutate} />
     </>
   );
 }

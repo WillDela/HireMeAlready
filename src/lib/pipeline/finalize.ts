@@ -72,7 +72,8 @@ async function finalizeAiTranscript(interview: InterviewForFinalize): Promise<Tr
 async function finalizePeerTranscript(interview: InterviewForFinalize): Promise<TranscriptLine[]> {
   const interviewStart = (interview.startedAt ?? interview.createdAt).getTime();
   const lines: TranscriptLine[] = [];
-  for (const recording of interview.recordings) {
+  // A PENDING recording's upload never finished.
+  for (const recording of interview.recordings.filter((r) => r.status === "READY")) {
     const participant = interview.participants.find((p) => p.id === recording.participantId);
     if (!participant) continue;
     const buffer = await getObjectBuffer(recording.storageKey);
@@ -87,6 +88,9 @@ async function finalizePeerTranscript(interview: InterviewForFinalize): Promise<
         text: segment.text,
       });
     }
+  }
+  if (lines.length === 0) {
+    throw new Error(`Interview ${interview.id} has no recordings with speech to transcribe`);
   }
   return lines.sort((a, b) => a.startMs - b.startMs);
 }
