@@ -2,20 +2,14 @@ import { HttpError } from "@/lib/api";
 import type { RecordingUploadInput, RecordingUploadResponse } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/interviews";
-import { log } from "@/lib/log";
-import { finalizeInterview } from "@/lib/pipeline/finalize";
 import { createUploadUrl, storageKeys } from "@/lib/storage";
 
-// Peer-mode recordings. Each side of a peer call records only its own mic and uploads it
-// when the call ends; once both are in, the finalize pipeline transcribes and merges them
-// into the interview's transcript.
+// Peer-call recordings. Each browser records the whole call as one stereo file (channel
+// 0: its own mic, channel 1: the other person as heard in the call) and uploads it when
+// the call ends. The finalize pipeline transcribes one of them with ElevenLabs Scribe's
+// multichannel mode (src/lib/pipeline/finalize.ts).
 
 const EXTENSIONS = { "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a" } as const;
-
-// How long to wait for the other side's recording before transcribing without it (they
-// may have closed the tab mid-upload).
-const PARTNER_WAIT_MS = 60_000;
-const PARTNER_POLL_MS = 3000;
 
 /** POST /api/interviews/:id/recordings/upload-url: reserves a Recording and returns a presigned PUT. */
 export async function createRecordingUpload(
@@ -50,40 +44,5 @@ export async function confirmRecording(interviewId: string, userId: string, reco
     data: { status: "READY" },
   });
   if (count === 0) throw new HttpError(404, "Recording not found");
-  log.info("recordings", "upload confirmed", { interview: interviewId, recording: recordingId });
-}
-
-/**
- * Finalizes once everyone who joined (and allows recording) has uploaded, or after
- * PARTNER_WAIT_MS with whatever arrived. Both sides' confirms run this; only one finalizes.
- */
-export async function finalizeWhenRecorded(interviewId: string) {
-  const deadline = Date.now() + PARTNER_WAIT_MS;
-  let complete = false;
-  while (!(complete = await allRecorded(interviewId)) && Date.now() < deadline) await sleep(PARTNER_POLL_MS);
-  if (!complete) {
-    log.warn("recordings", "partner's recording never arrived; transcribing what we have", {
-      interview: interviewId,
-      waitedMs: PARTNER_WAIT_MS,
-    });
-  }
-
-  const { count } = await db.interview.updateMany({
-    where: { id: interviewId, transcriptStatus: "PENDING" },
-    data: { transcriptStatus: "PROCESSING" },
-  });
-  if (count > 0) await finalizeInterview(interviewId);
-  else log.debug("recordings", "already finalizing on the other side's upload", { interview: interviewId });
-}
-
-async function allRecorded(interviewId: string) {
-  const participants = await db.participant.findMany({
-    where: { interviewId, joinedAt: { not: null }, user: { profile: { recordingConsent: true } } },
-    include: { recordings: { select: { status: true } } },
-  });
-  return participants.every((p) => p.recordings.length > 0 && p.recordings.every((r) => r.status === "READY"));
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return { ok: true };
 }

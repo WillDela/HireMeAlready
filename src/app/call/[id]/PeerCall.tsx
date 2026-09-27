@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { UserX, WifiOff } from "lucide-react";
 import type { IceServersResponse, PeerSession } from "@/lib/contracts";
 import { useDevicePrefs } from "@/lib/rtc/device-prefs";
-import { uploadRecording, useMicRecorder } from "@/lib/rtc/use-mic-recorder";
+import { uploadRecording, useCallRecorder } from "@/lib/rtc/use-call-recorder";
 import { usePeerCall } from "@/lib/rtc/use-peer-call";
 import { apiFetch, useApiResource } from "@/lib/use-api";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
@@ -89,8 +89,8 @@ function PeerRoom({ session }: { session: PeerSession }) {
     !leaving && (call.state === "ended" || session.status === "COMPLETED" || session.status === "ABANDONED");
   const elapsed = useElapsed(connected && !partnerGone);
   const panelId = "candidate-file";
-  // Your side of the transcript. Each of you records only your own mic.
-  const recorder = useMicRecorder(call.localStream, connected && currentUser.recordingConsent);
+  // The call's recording, for its transcript: both voices in one stereo file.
+  const recorder = useCallRecorder(call.localStream, call.remoteStream, connected && session.recordingAllowed);
 
   // The first connection starts the interview for both of us.
   useEffect(() => {
@@ -112,13 +112,13 @@ function PeerRoom({ session }: { session: PeerSession }) {
     call.localStream?.getVideoTracks().forEach((t) => (t.enabled = cameraOn));
   }, [call.localStream, cameraOn]);
 
-  // Stop recording before the mic is released, then upload in the background: it carries
-  // on after we navigate to the wrap-up. Only the first call has anything to upload.
+  // Stop recording before the call's tracks are released, then upload in the background:
+  // it carries on after we navigate to the wrap-up. Only the first call has anything.
   const { stop: stopRecording } = recorder;
   const saveRecording = useCallback(() => {
     stopRecording()
       .then((recording) => recording && uploadRecording(interviewId, recording))
-      .catch((err) => console.error("Couldn't save your side of the transcript:", err));
+      .catch((err) => console.error("Couldn't save the call recording:", err));
   }, [stopRecording, interviewId]);
 
   // Once they've gone, release the camera and mic.
@@ -166,7 +166,7 @@ function PeerRoom({ session }: { session: PeerSession }) {
           <span className="stamp flex-none text-[0.6875rem] text-stamp" style={{ ["--r" as string]: "-3deg" }}>
             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-stamp motion-safe:animate-[blink_1.6s_ease-in-out_infinite]" />
             Rec
-            <span className="visually-hidden"> Recording your mic for the transcript</span>
+            <span className="visually-hidden"> Recording the call for its transcript</span>
           </span>
         ) : null}
         <h1 className="min-w-0 truncate text-[0.9375rem] font-semibold">

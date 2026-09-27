@@ -4,8 +4,8 @@ import { createRecordingUpload } from "@/lib/recordings";
 import { requireUser } from "@/lib/session";
 
 // POST /api/interviews/:id/recordings/upload-url { mimeType, startedAgoMs }: reserves a
-// Recording for your side of a peer call and returns a presigned PUT. The browser PUTs
-// with `Content-Type: <mimeType>`, then calls POST /api/interviews/:id/recordings.
+// Recording of a peer call and returns a presigned PUT. The browser PUTs with
+// `Content-Type: <mimeType>`, then calls POST /api/interviews/:id/recordings.
 export function POST(request: Request, ctx: RouteContext<"/api/interviews/[id]/recordings/upload-url">) {
   return handleRoute(async () => {
     const user = await requireUser();

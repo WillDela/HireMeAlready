@@ -21,7 +21,12 @@ export async function elevenLabsFetch<T>(path: string, init: RequestInit = {}): 
   return timed("elevenlabs", `${method} ${path.split("?")[0]}`, async () => {
     const res = await fetch(`${API}${path}`, {
       ...init,
-      headers: { "xi-api-key": apiKey(), "Content-Type": "application/json", ...init.headers },
+      // A FormData body sets its own multipart Content-Type.
+      headers: {
+        "xi-api-key": apiKey(),
+        ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+        ...init.headers,
+      },
     });
     if (!res.ok) throw new Error(`ElevenLabs ${method} ${path} failed: ${res.status} ${await res.text()}`);
     return res.json() as Promise<T>;
@@ -46,5 +51,31 @@ export type ElevenLabsConversation = {
 /** Conversation details incl. transcript. `status` becomes "done" a few seconds after the call ends. */
 export function getConversation(conversationId: string) {
   return elevenLabsFetch<ElevenLabsConversation>(`/convai/conversations/${conversationId}`);
+}
+
+export type ScribeWord = {
+  text: string;
+  start?: number | null; // seconds from the start of the file
+  end?: number | null;
+  type: "word" | "spacing" | "audio_event";
+  channel_index?: number;
+};
+
+type MultichannelTranscript = { transcripts: { channel_index?: number; text: string; words: ScribeWord[] }[] };
+
+/**
+ * Transcribes a recording with one speaker per channel (Scribe's multichannel mode):
+ * each channel is transcribed on its own, with word timings on the file's one timeline.
+ * Returns every word, tagged with its channel. Needs the key's speech_to_text permission.
+ */
+export async function transcribeChannels(audio: Buffer, mimeType: string, fileName: string): Promise<ScribeWord[]> {
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(audio)], { type: mimeType }), fileName);
+  form.append("model_id", "scribe_v2");
+  form.append("use_multi_channel", "true");
+  form.append("language_code", "en");
+  form.append("timestamps_granularity", "word");
+  const { transcripts } = await elevenLabsFetch<MultichannelTranscript>("/speech-to-text", { method: "POST", body: form });
+  return transcripts.flatMap((t) => t.words.map((w) => ({ ...w, channel_index: w.channel_index ?? t.channel_index })));
 }
 

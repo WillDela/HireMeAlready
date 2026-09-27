@@ -239,19 +239,21 @@ export type PeerSession = {
   // Interviewer only, and only when the candidate shares their resume.
   candidate: (ResumeView & { name: string; initials: string; target: string }) | null;
   questions: Question[]; // suggested questions; interviewer only
+  // Both of you allow recording (Profile.recordingConsent), so the call can be recorded
+  // for its transcript. The recording has both voices, so it needs both.
+  recordingAllowed: boolean;
 };
 
 export const PeerEventInput = z.object({ event: z.enum(["connected", "left"]) });
 export type PeerEventInput = z.infer<typeof PeerEventInput>;
 
-// Containers a peer call's own-mic recording can come in: Chrome records WebM, Firefox
-// Ogg, Safari MP4. Codec parameters are dropped.
+// Containers a peer call recording can come in: Chrome records WebM, Firefox Ogg,
+// Safari MP4. Codec parameters are dropped.
 export const RecordingMimeType = z.enum(["audio/webm", "audio/ogg", "audio/mp4"]);
 export type RecordingMimeType = z.infer<typeof RecordingMimeType>;
 
 // POST /api/interviews/:id/recordings/upload-url. `startedAgoMs` is how long ago the
-// recording started, measured on the client, so the server can place it on its own clock
-// (a timestamp would carry the client's clock skew into the merged transcript).
+// recording started, measured on the device, so the server places it on its own clock.
 export const RecordingUploadInput = z.object({
   mimeType: RecordingMimeType,
   startedAgoMs: z.number().int().nonnegative().max(4 * 60 * 60 * 1000),

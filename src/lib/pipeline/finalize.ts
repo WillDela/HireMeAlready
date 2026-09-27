@@ -1,19 +1,26 @@
 import type { GeneratedQuestion, TranscriptLine } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { getConversation } from "@/lib/elevenlabs";
-import { analyzeInterview, transcribeAudio } from "@/lib/gemini";
+import { getConversation, transcribeChannels, type ScribeWord } from "@/lib/elevenlabs";
+import { analyzeInterview } from "@/lib/gemini";
 import { outOf5 } from "@/lib/history";
 import { log } from "@/lib/log";
 import { notify } from "@/lib/notifications";
 import { getObjectBuffer } from "@/lib/storage";
 
-// Owner: Stream C. Runs after an interview ends (called from POST /api/interviews/:id/end
-// via `after()`): pulls the transcript, saves it, then runs Gemini's analysis on it.
-// AI mode reads the transcript from ElevenLabs; peer mode transcribes each participant's
-// own recording and merges them by wall-clock offset.
+// Owner: Stream C. Runs after an interview ends, via `after()`: POST /api/interviews/:id/end
+// for AI mode, the PATCH /api/interviews/:id/peer `left` that ends a peer call. Collects
+// the transcript, then runs Gemini's analysis on it. Both modes are transcribed by
+// ElevenLabs: AI mode reads the conversation's transcript back from ElevenLabs; peer mode
+// sends the call's two-channel recording to ElevenLabs Scribe (src/lib/recordings.ts).
 
 const CONVERSATION_POLL_MS = 2000;
 const CONVERSATION_POLL_ATTEMPTS = 20; // ElevenLabs finishes processing a few seconds after the call ends; ~40s ceiling
+// Recordings upload right after the call. Take the first one in, after giving the other
+// side's a moment (the earliest-started covers the most of the call).
+const RECORDING_POLL_MS = 2000;
+const SECOND_RECORDING_GRACE_MS = 10_000;
+const RECORDING_WAIT_MS = 90_000;
+const PEER_PAUSE_SECS = 1.5; // a longer silence starts a new transcript line
 
 function loadInterview(interviewId: string) {
   return db.interview.findUnique({
@@ -21,7 +28,6 @@ function loadInterview(interviewId: string) {
     include: {
       questions: { orderBy: { order: "asc" } },
       participants: true,
-      recordings: true,
       feedback: true,
     },
   });
@@ -83,44 +89,85 @@ async function finalizeAiTranscript(interview: InterviewForFinalize): Promise<Tr
   return lines;
 }
 
+/**
+ * Both browsers upload a stereo recording of the call (channel 0: the uploader's mic,
+ * channel 1: the other person as heard in the call). Waits for one like AI mode waits for
+ * ElevenLabs, then transcribes it with Scribe's multichannel mode: both voices come from
+ * one file on one clock, so their order and timing need no aligning.
+ */
 async function finalizePeerTranscript(interview: InterviewForFinalize): Promise<TranscriptLine[]> {
-  const interviewStart = (interview.startedAt ?? interview.createdAt).getTime();
-  const lines: TranscriptLine[] = [];
-  // A PENDING recording's upload never finished.
-  const ready = interview.recordings.filter((r) => r.status === "READY");
-  if (ready.length < interview.recordings.length) {
-    log.warn("pipeline", "some recordings never finished uploading", {
-      interview: interview.id,
-      ready: ready.length,
-      total: interview.recordings.length,
-    });
-  }
-  for (const recording of ready) {
-    const participant = interview.participants.find((p) => p.id === recording.participantId);
-    if (!participant) continue;
-    const buffer = await getObjectBuffer(recording.storageKey);
-    const segments = await transcribeAudio(buffer, recording.mimeType);
-    log.info("pipeline", "recording transcribed", {
-      interview: interview.id,
-      role: participant.role,
-      kb: Math.round(buffer.length / 1024),
-      segments: segments.length,
-    });
-    const offsetMs = recording.startedAt.getTime() - interviewStart;
-    for (const segment of segments) {
-      lines.push({
-        speaker: participant.role,
-        userId: participant.userId,
-        startMs: offsetMs + segment.startMs,
-        endMs: offsetMs + segment.endMs,
-        text: segment.text,
-      });
+  const recording = await waitForRecording(interview);
+  const uploader = interview.participants.find((p) => p.id === recording.participantId);
+  const other = interview.participants.find((p) => p.id !== recording.participantId);
+  if (!uploader || !other) throw new Error(`Interview ${interview.id} is missing a participant`);
+
+  const audio = await getObjectBuffer(recording.storageKey);
+  const words = await transcribeChannels(audio, recording.mimeType, recording.storageKey.split("/").pop()!);
+  log.info("pipeline", "recording transcribed", { interview: interview.id, recording: recording.id, words: words.length });
+
+  // Word times count from the start of the recording; place them on the interview's timeline.
+  const offsetMs = recording.startedAt.getTime() - (interview.startedAt ?? interview.createdAt).getTime();
+  const lastMs = interview.startedAt && interview.endedAt ? interview.endedAt.getTime() - interview.startedAt.getTime() : Infinity;
+  const at = (secs: number) => Math.round(Math.min(Math.max(offsetMs + secs * 1000, 0), lastMs));
+  const speakers = [uploader, other];
+
+  const lines = channelTurns(words, speakers.length).map(
+    (turn): TranscriptLine => ({
+      speaker: speakers[turn.channel].role,
+      userId: speakers[turn.channel].userId,
+      startMs: at(turn.start),
+      endMs: at(turn.end),
+      text: turn.text,
+    }),
+  );
+  if (lines.length === 0) throw new Error(`Recording ${recording.id} has no speech`);
+  return lines;
+}
+
+/**
+ * Groups a multichannel transcript's words into turns, in time order: a new turn when the
+ * other channel speaks or after a pause, like the AI transcript's turns. Times in seconds.
+ */
+export function channelTurns(words: ScribeWord[], channels: number) {
+  const turns: { channel: number; start: number; end: number; text: string }[] = [];
+  const spoken = words
+    .filter((w) => w.type === "word" && w.start != null && w.end != null && (w.channel_index ?? -1) >= 0)
+    .filter((w) => w.channel_index! < channels)
+    .sort((a, b) => a.start! - b.start!);
+  for (const w of spoken) {
+    const last = turns[turns.length - 1];
+    if (last && last.channel === w.channel_index && w.start! - last.end <= PEER_PAUSE_SECS) {
+      last.text += ` ${w.text}`;
+      last.end = w.end!;
+    } else {
+      turns.push({ channel: w.channel_index!, start: w.start!, end: w.end!, text: w.text });
     }
   }
-  if (lines.length === 0) {
-    throw new Error(`Interview ${interview.id} has no recordings with speech to transcribe`);
+  return turns;
+}
+
+/** The uploaded recording that covers the most of the call: the earliest started. */
+async function waitForRecording(interview: InterviewForFinalize) {
+  const deadline = Date.now() + RECORDING_WAIT_MS;
+  let firstSeen: number | null = null;
+  for (;;) {
+    const ready = await db.recording.findMany({
+      where: { interviewId: interview.id, status: "READY" },
+      orderBy: { startedAt: "asc" },
+    });
+    const now = Date.now();
+    if (ready.length) firstSeen ??= now;
+    // Both are in, the other side had its chance, or time's up.
+    const settled =
+      ready.length >= interview.participants.length ||
+      (firstSeen !== null && now - firstSeen >= SECOND_RECORDING_GRACE_MS) ||
+      now >= deadline;
+    if (settled) {
+      if (!ready.length) throw new Error(`Interview ${interview.id} has no uploaded recording`);
+      return ready[0];
+    }
+    await sleep(RECORDING_POLL_MS);
   }
-  return lines.sort((a, b) => a.startMs - b.startMs);
 }
 
 async function saveTranscript(interviewId: string, transcript: TranscriptLine[]) {

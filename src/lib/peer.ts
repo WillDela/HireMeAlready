@@ -63,16 +63,19 @@ export async function getPeerSession(interviewId: string, userId: string): Promi
         }
       : null,
     questions: isInterviewer ? interview.questions.map(toQuestionView) : [],
+    recordingAllowed: interview.participants.every((p) => p.user.profile?.recordingConsent === true),
   };
 }
 
 /**
  * PATCH /api/interviews/:id/peer. `connected`: the first one starts the interview.
  * `left`: ends it (COMPLETED, or ABANDONED if it never started). Both are idempotent.
+ * `completedNow` is true only for the call that ended it, which finalizes it.
  */
 export async function recordPeerEvent(interviewId: string, userId: string, { event }: PeerEventInput) {
   const me = await myParticipation(interviewId, userId);
   const now = new Date();
+  let completedNow = false;
   if (event === "connected") {
     await db.$transaction([
       db.participant.updateMany({ where: { id: me.id, joinedAt: null }, data: { joinedAt: now } }),
@@ -82,14 +85,15 @@ export async function recordPeerEvent(interviewId: string, userId: string, { eve
       }),
     ]);
   } else {
-    await db.$transaction([
+    const [, completed] = await db.$transaction([
       db.participant.updateMany({ where: { id: me.id, leftAt: null }, data: { leftAt: now } }),
       db.interview.updateMany({ where: { id: interviewId, status: "ACTIVE" }, data: { status: "COMPLETED", endedAt: now } }),
       db.interview.updateMany({ where: { id: interviewId, status: "PENDING" }, data: { status: "ABANDONED", endedAt: now } }),
     ]);
+    completedNow = completed.count > 0;
   }
   const { status } = await db.interview.findUniqueOrThrow({ where: { id: interviewId }, select: { status: true } });
-  return { status };
+  return { status, completedNow };
 }
 
 /** GET /api/interviews/:id/feedback: what the wrap-up page shows after a peer interview. */
