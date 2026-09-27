@@ -3,7 +3,7 @@ import { JoinQueueInput } from "@/lib/contracts";
 import { joinQueue, leaveQueue, queueState } from "@/lib/matching";
 import { requireUser } from "@/lib/session";
 
-// POST /api/queue { role, jobTitle?, company? }: join the line (at the back). Returns a QueueState.
+// POST /api/queue { role, jobTitle?, company?, jobDescription? }: join the line (at the back). Returns a QueueState.
 export function POST(request: Request) {
   return handleRoute(async () => {
     const user = await requireUser();

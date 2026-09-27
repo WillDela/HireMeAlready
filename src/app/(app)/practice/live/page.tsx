@@ -11,7 +11,7 @@ import type { ResumeView } from "@/lib/views";
 import { DeviceCheck } from "@/components/call/DeviceCheck";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { TextField } from "@/components/ui/Field";
+import { TextAreaField, TextField } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Stamp } from "@/components/ui/Stamp";
 import { EmptyFolder, ErrorReturned } from "@/components/ui/States";
@@ -53,6 +53,7 @@ export default function LivePracticePage() {
   const [seconds, setSeconds] = useState(0);
   const [company, setCompany] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [jd, setJd] = useState("");
   const [joining, setJoining] = useState(false);
   const [match, setMatch] = useState<Match | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -152,6 +153,7 @@ export default function LivePracticePage() {
             role: role === "interviewee" ? "INTERVIEWEE" : "INTERVIEWER",
             jobTitle: jobTitle.trim() || undefined,
             company: company.trim() || undefined,
+            jobDescription: jd.trim() || undefined,
           }),
         }),
       );
@@ -198,6 +200,16 @@ export default function LivePracticePage() {
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <TextField label="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
                 <TextField label="Job title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
+                <TextAreaField
+                  label="Job description"
+                  className="sm:col-span-2"
+                  rows={6}
+                  maxLength={15000}
+                  value={jd}
+                  onChange={(e) => setJd(e.target.value)}
+                  placeholder="Paste the posting. Optional, but your interviewer's suggested questions get much more specific."
+                  hint={jd.trim() ? `${jd.trim().split(/\s+/).length} words` : "Optional"}
+                />
               </div>
             ) : (
               <p className="mt-2 text-ink-2">
@@ -228,6 +240,11 @@ export default function LivePracticePage() {
               {role === "interviewee" ? (
                 <li>
                   Target: <span className="font-semibold text-ink">{jobTitle || "any role"}{company ? ` at ${company}` : ""}</span>
+                </li>
+              ) : null}
+              {role === "interviewee" && jd.trim() ? (
+                <li>
+                  Questions: <span className="font-semibold text-ink">tailored to the job description</span>
                 </li>
               ) : null}
             </ul>

@@ -140,6 +140,7 @@ export const JoinQueueInput = z.object({
   role: InterviewRole,
   jobTitle: z.string().trim().max(120).optional(),
   company: z.string().trim().max(120).optional(), // interviewees only
+  jobDescription: z.string().trim().max(15000, "Trim the job description a little.").optional(), // interviewees only
 });
 export type JoinQueueInput = z.infer<typeof JoinQueueInput>;
 
