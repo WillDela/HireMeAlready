@@ -239,22 +239,30 @@ export type PeerSession = {
   // Interviewer only, and only when the candidate shares their resume.
   candidate: (ResumeView & { name: string; initials: string; target: string }) | null;
   questions: Question[]; // suggested questions; interviewer only
+  // Both of you allow recording (Profile.recordingConsent), so the call can be recorded
+  // for its transcript. The recording has both voices, so it needs both.
+  recordingAllowed: boolean;
 };
 
 export const PeerEventInput = z.object({ event: z.enum(["connected", "left"]) });
 export type PeerEventInput = z.infer<typeof PeerEventInput>;
 
-// POST /api/interviews/:id/transcript: one line you said in a peer call, as ElevenLabs
-// Scribe transcribed it live. `startedAgoMs` is how long ago you started saying it,
-// measured on your device, so the server places it on its own clock: both sides' lines
-// then share one timeline without trusting either device's clock.
-const MAX_LINE_MS = 10 * 60 * 1000;
-export const TranscriptLineInput = z.object({
-  text: z.string().trim().min(1).max(5000),
-  startedAgoMs: z.number().int().nonnegative().max(MAX_LINE_MS),
-  durationMs: z.number().int().nonnegative().max(MAX_LINE_MS),
+// Containers a peer call recording can come in: Chrome records WebM, Firefox Ogg,
+// Safari MP4. Codec parameters are dropped.
+export const RecordingMimeType = z.enum(["audio/webm", "audio/ogg", "audio/mp4"]);
+export type RecordingMimeType = z.infer<typeof RecordingMimeType>;
+
+// POST /api/interviews/:id/recordings/upload-url. `startedAgoMs` is how long ago the
+// recording started, measured on the device, so the server places it on its own clock.
+export const RecordingUploadInput = z.object({
+  mimeType: RecordingMimeType,
+  startedAgoMs: z.number().int().nonnegative().max(4 * 60 * 60 * 1000),
 });
-export type TranscriptLineInput = z.infer<typeof TranscriptLineInput>;
+export type RecordingUploadInput = z.infer<typeof RecordingUploadInput>;
+
+// POST /api/interviews/:id/recordings: the recording finished uploading.
+export const ConfirmRecordingInput = z.object({ recordingId: z.string().min(1) });
+export type ConfirmRecordingInput = z.infer<typeof ConfirmRecordingInput>;
 
 // GET /api/interviews/:id/feedback, the wrap-up page after a peer interview. POST takes
 // a FeedbackInput (interviewer only) and returns this again.
@@ -274,9 +282,9 @@ export type IceServersResponse = { iceServers: RTCIceServer[]; ttl: number };
 // POST /api/resume/upload-url
 export type UploadUrlResponse = { uploadUrl: string; storageKey: string; resumeId: string };
 
-// POST /api/interviews/:id/transcript/token: a single-use token for one ElevenLabs Scribe
-// realtime session (your side of a peer call).
-export type TranscriptTokenResponse = { token: string };
+// POST /api/interviews/:id/recordings/upload-url. PUT the audio with the same Content-Type
+// as the requested mimeType, then confirm with the recordingId.
+export type RecordingUploadResponse = { uploadUrl: string; recordingId: string };
 
 // POST /api/ai/questions
 export type QuestionSetResponse = { questions: GeneratedQuestion[] };

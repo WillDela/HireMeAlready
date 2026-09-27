@@ -15,8 +15,8 @@ export function GET(_request: Request, ctx: RouteContext<"/api/interviews/[id]/p
 }
 
 // PATCH /api/interviews/:id/peer { event: "connected" | "left" }: returns { status }.
-// The `left` that ends the interview then, in the background, collects the live
-// transcript and runs the analysis (src/lib/pipeline/finalize.ts), like /end for AI mode.
+// The `left` that ends the interview then, in the background, transcribes the call's
+// recording and runs the analysis (src/lib/pipeline/finalize.ts), like /end for AI mode.
 export function PATCH(request: Request, ctx: RouteContext<"/api/interviews/[id]/peer">) {
   return handleRoute(async () => {
     const user = await requireUser();

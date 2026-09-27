@@ -63,6 +63,7 @@ export async function getPeerSession(interviewId: string, userId: string): Promi
         }
       : null,
     questions: isInterviewer ? interview.questions.map(toQuestionView) : [],
+    recordingAllowed: interview.participants.every((p) => p.user.profile?.recordingConsent === true),
   };
 }
 

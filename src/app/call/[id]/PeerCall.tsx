@@ -1,11 +1,11 @@
 "use client";
 
 import { notFound, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { UserX, WifiOff } from "lucide-react";
 import type { IceServersResponse, PeerSession } from "@/lib/contracts";
 import { useDevicePrefs } from "@/lib/rtc/device-prefs";
-import { useLiveTranscript } from "@/lib/rtc/use-live-transcript";
+import { uploadRecording, useCallRecorder } from "@/lib/rtc/use-call-recorder";
 import { usePeerCall } from "@/lib/rtc/use-peer-call";
 import { apiFetch, useApiResource } from "@/lib/use-api";
 import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
@@ -89,12 +89,8 @@ function PeerRoom({ session }: { session: PeerSession }) {
     !leaving && (call.state === "ended" || session.status === "COMPLETED" || session.status === "ABANDONED");
   const elapsed = useElapsed(connected && !partnerGone);
   const panelId = "candidate-file";
-  // Your side of the transcript, transcribed live from your own mic while the call is on.
-  const transcript = useLiveTranscript({
-    interviewId,
-    active: connected && !partnerGone && !leaving && currentUser.recordingConsent,
-    muted: !micOn,
-  });
+  // The call's recording, for its transcript: both voices in one stereo file.
+  const recorder = useCallRecorder(call.localStream, call.remoteStream, connected && session.recordingAllowed);
 
   // The first connection starts the interview for both of us.
   useEffect(() => {
@@ -116,16 +112,28 @@ function PeerRoom({ session }: { session: PeerSession }) {
     call.localStream?.getVideoTracks().forEach((t) => (t.enabled = cameraOn));
   }, [call.localStream, cameraOn]);
 
+  // Stop recording before the call's tracks are released, then upload in the background:
+  // it carries on after we navigate to the wrap-up. Only the first call has anything.
+  const { stop: stopRecording } = recorder;
+  const saveRecording = useCallback(() => {
+    stopRecording()
+      .then((recording) => recording && uploadRecording(interviewId, recording))
+      .catch((err) => console.error("Couldn't save the call recording:", err));
+  }, [stopRecording, interviewId]);
+
   // Once they've gone, release the camera and mic.
   const { hangUp } = call;
   useEffect(() => {
-    if (partnerGone) hangUp();
-  }, [partnerGone, hangUp]);
+    if (!partnerGone) return;
+    saveRecording();
+    hangUp();
+  }, [partnerGone, saveRecording, hangUp]);
 
   // After a real conversation, both of you go to the wrap-up: the interviewer rates the
   // candidate there. A call that never connected has nothing to wrap up.
   async function leave(to = everConnected ? `/call/${interviewId}/wrap-up` : "/dashboard") {
     setLeaving(true);
+    saveRecording();
     hangUp();
     await apiFetch(`/api/interviews/${interviewId}/peer`, {
       method: "PATCH",
@@ -154,11 +162,11 @@ function PeerRoom({ session }: { session: PeerSession }) {
     <div className="surface-night flex h-dvh flex-col">
       <title>{`In interview · ${partner.name}`}</title>
       <header className="flex h-14 flex-none items-center gap-3 px-4 sm:px-5">
-        {transcript.live ? (
+        {recorder.recording ? (
           <span className="stamp flex-none text-[0.6875rem] text-stamp" style={{ ["--r" as string]: "-3deg" }}>
             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-stamp motion-safe:animate-[blink_1.6s_ease-in-out_infinite]" />
             Rec
-            <span className="visually-hidden"> Transcribing your mic</span>
+            <span className="visually-hidden"> Recording the call for its transcript</span>
           </span>
         ) : null}
         <h1 className="min-w-0 truncate text-[0.9375rem] font-semibold">
