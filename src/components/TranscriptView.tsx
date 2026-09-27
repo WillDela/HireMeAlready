@@ -54,7 +54,7 @@ export function TranscriptView({ turns, className }: { turns: TranscriptTurn[]; 
       <ol
         tabIndex={0}
         aria-label="Transcript"
-        className="max-h-[34rem] overflow-y-auto px-5 py-2 sm:px-6"
+        className="px-5 py-2 sm:max-h-[34rem] sm:overflow-y-auto sm:px-6"
       >
         {turns.map((t) => (
           <li

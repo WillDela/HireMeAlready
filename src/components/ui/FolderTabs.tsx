@@ -64,7 +64,11 @@ export function FolderTabs({
               aria-controls={`${base}-panel`}
               tabIndex={selected ? 0 : -1}
               className="ftab"
-              onClick={() => onChange(tab.id)}
+              onClick={(e) => {
+                onChange(tab.id);
+                // On narrow screens the strip scrolls; bring a half-hidden tab fully into view.
+                e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+              }}
               onKeyDown={(e) => onKeyDown(e, i)}
             >
               {tab.icon}

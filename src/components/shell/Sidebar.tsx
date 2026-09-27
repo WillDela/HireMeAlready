@@ -73,7 +73,7 @@ export function MobileTabBar() {
       aria-label="Main"
       className="surface-drawer fixed inset-x-0 bottom-0 z-40 bg-drawer pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      <ul className="grid grid-cols-6">
+      <ul className="grid auto-cols-fr grid-flow-col">
         {navItems.map((item) => {
           const active = item.match(pathname);
           const Icon = item.icon;

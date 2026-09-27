@@ -13,7 +13,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <Sidebar />
-      <div className="desk flex min-w-0 flex-1 flex-col">
+      {/* Clip, not hidden: no scroll container, so the sticky top bar still sticks. Stops
+          entrance animations (the score stamp lands at 1.9x) from widening the page on phones. */}
+      <div className="desk flex min-w-0 flex-1 flex-col overflow-x-clip">
         <TopBar />
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[76rem] flex-1 px-4 pt-8 pb-32 outline-none sm:px-6 md:pb-20 lg:px-10 lg:pt-12">
           {children}

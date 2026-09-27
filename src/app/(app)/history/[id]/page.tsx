@@ -44,7 +44,7 @@ function Summary({ iv, onJump }: { iv: InterviewDetail; onJump: () => void }) {
           </>
         ) : null}
       </div>
-      <dl className="h-fit space-y-3 rounded-[3px] bg-paper-2 p-5 text-[0.9375rem]">
+      <dl className="grid h-fit grid-cols-2 gap-x-4 gap-y-3 rounded-[3px] bg-paper-2 p-5 text-[0.9375rem] lg:grid-cols-1">
         {[
           ["Type", iv.type === "ai" ? "AI interview" : "Live, with a person"],
           ["Date", iv.dateLabel],
@@ -249,15 +249,15 @@ function People({ iv }: { iv: InterviewDetail }) {
     <ul className="divide-y divide-edge">
       {iv.people.map((p) => (
         <li key={p.id} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:px-7">
-          <div className="flex flex-1 items-center gap-3.5">
+          <div className="flex min-w-0 flex-1 items-center gap-3.5">
             <Avatar name={p.name} initials={p.initials} size={48} />
             <div className="min-w-0">
               <p className="font-bold">{p.name}</p>
               <p className="text-[0.875rem] text-ink-2">{p.headline}</p>
               {p.contact ? (
-                <a href={`mailto:${p.contact}`} className="mt-0.5 inline-flex items-center gap-1.5 text-[0.875rem] font-semibold underline">
-                  <Mail size={14} aria-hidden="true" />
-                  {p.contact}
+                <a href={`mailto:${p.contact}`} className="mt-0.5 inline-flex max-w-full items-center gap-1.5 text-[0.875rem] font-semibold underline">
+                  <Mail size={14} aria-hidden="true" className="flex-none" />
+                  <span className="min-w-0 break-all">{p.contact}</span>
                 </a>
               ) : null}
             </div>
@@ -313,7 +313,7 @@ export default function InterviewDetailPage({ params }: { params: Promise<{ id: 
               <span aria-hidden="true">·</span>
               <span className="tnum">{iv.duration}</span>
             </p>
-            <h1 className="wide mt-3 text-[2rem] leading-[1.02] font-extrabold tracking-[-0.025em] md:text-[2.75rem]">
+            <h1 className="wide mt-3 text-[2rem] leading-[1.02] font-extrabold tracking-[-0.025em] wrap-break-word md:text-[2.75rem]">
               {iv.company}
             </h1>
             <p className="mt-1.5 text-[1.0625rem] text-manila-ink">
