@@ -18,7 +18,7 @@
 
 Most mock-interview tools ask the same generic questions to everyone. Hire Me Already starts from the job you're applying for. It searches the web for questions candidates say they were asked at that company, keeps only the ones it can verify on the source page, and fills the rest from the role, the job description and your resume. You can then practice against a voice AI interviewer, or get matched with another person whose background is close to yours. After the call you get a transcript, a scored analysis and, for human interviews, written feedback from your interviewer.
 
-Built at **ShellHacks**.
+Built at **ShellHacks X 2026**.
 
 ## Features
 
