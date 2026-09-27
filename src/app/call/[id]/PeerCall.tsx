@@ -4,6 +4,7 @@ import { notFound, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UserX, WifiOff } from "lucide-react";
 import type { IceServersResponse, PeerSession } from "@/lib/contracts";
+import { useDevicePrefs } from "@/lib/rtc/device-prefs";
 import { uploadRecording, useMicRecorder } from "@/lib/rtc/use-mic-recorder";
 import { usePeerCall } from "@/lib/rtc/use-peer-call";
 import { apiFetch, useApiResource } from "@/lib/use-api";
@@ -66,8 +67,12 @@ function PeerRoom({ session }: { session: PeerSession }) {
     isCaller: session.isCaller,
     iceServers: turn.data?.iceServers ?? null,
   });
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(true);
+  // Start muted / camera off if that's how you left the lobby.
+  const devicePrefs = useDevicePrefs();
+  const [micToggle, setMicOn] = useState<boolean | null>(null);
+  const [cameraToggle, setCameraOn] = useState<boolean | null>(null);
+  const micOn = micToggle ?? devicePrefs.micOn;
+  const cameraOn = cameraToggle ?? devicePrefs.cameraOn;
   // Closed by default on small screens. PeerRoom only renders client-side, after the session loads.
   const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia("(max-width: 1023px)").matches);
   const [reportOpen, setReportOpen] = useState(false);
@@ -180,9 +185,11 @@ function PeerRoom({ session }: { session: PeerSession }) {
         <main id="main" className="relative min-w-0 flex-1 px-3 pb-2 sm:px-4">
           <VideoTile stream={call.remoteStream} name={partner.name} initials={partner.initials} className="h-full w-full" />
 
-          <div className="absolute right-6 bottom-5 w-24 shadow-[0_12px_28px_-10px_oklch(0.03_0.02_266/0.8)] sm:right-8 sm:bottom-6 sm:w-52">
+          {/* Above the status overlays, so you can check your camera while waiting. */}
+          <div className="absolute right-6 bottom-5 z-10 w-24 shadow-[0_12px_28px_-10px_oklch(0.03_0.02_266/0.8)] sm:right-8 sm:bottom-6 sm:w-52">
             <VideoTile
-              stream={call.localStream}
+              // Once the call ends or fails the camera is released: show initials, not a black frame.
+              stream={partnerGone || call.state === "failed" ? null : call.localStream}
               name={currentUser.name}
               initials={currentUser.initials}
               self
@@ -256,8 +263,8 @@ function PeerRoom({ session }: { session: PeerSession }) {
         <CallControls
           micOn={micOn}
           cameraOn={cameraOn}
-          onToggleMic={() => setMicOn((v) => !v)}
-          onToggleCamera={() => setCameraOn((v) => !v)}
+          onToggleMic={() => setMicOn(!micOn)}
+          onToggleCamera={() => setCameraOn(!cameraOn)}
           onReport={() => setReportOpen(true)}
           onEnd={() => setEndOpen(true)}
           endLabel="Leave"

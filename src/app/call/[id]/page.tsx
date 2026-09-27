@@ -8,6 +8,7 @@ import { useCurrentUser } from "@/components/shell/CurrentUserProvider";
 import { setForcedState, useForcedState } from "@/lib/mock-state";
 import { useRole } from "@/lib/prefs";
 import { useDevicePrefs } from "@/lib/rtc/device-prefs";
+import { useCameraPreview } from "@/lib/rtc/use-local-media";
 import { apiFetch } from "@/lib/use-api";
 import { useCallSession } from "@/lib/use-call-session";
 import { AiInterviewer, type AiInterviewerHandle } from "@/components/call/AiInterviewer";
@@ -90,6 +91,8 @@ function CallRoom({ id, session, live }: { id: string; session: CallSession; liv
   const [cameraToggle, setCameraOn] = useState<boolean | null>(null);
   const micOn = micToggle ?? devicePrefs.micOn;
   const cameraOn = cameraToggle ?? devicePrefs.cameraOn;
+  // Design previews (not `live`) never touch the camera.
+  const selfStream = useCameraPreview(live && cameraOn);
   const [panelOpen, setPanelOpen] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
@@ -169,6 +172,7 @@ function CallRoom({ id, session, live }: { id: string; session: CallSession; liv
 
           <div className="absolute right-6 bottom-5 w-24 shadow-[0_12px_28px_-10px_oklch(0.03_0.02_266/0.8)] sm:right-8 sm:bottom-6 sm:w-52">
             <VideoTile
+              stream={selfStream}
               name={currentUser.name}
               initials={currentUser.initials}
               self
