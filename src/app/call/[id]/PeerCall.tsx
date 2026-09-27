@@ -131,7 +131,7 @@ function PeerRoom({ session }: { session: PeerSession }) {
 
   // After a real conversation, both of you go to the wrap-up: the interviewer rates the
   // candidate there. A call that never connected has nothing to wrap up.
-  async function leave(to = everConnected ? `/call/${interviewId}/wrap-up` : "/dashboard") {
+  async function leave(to = everConnected ? `/call/${interviewId}/wrap-up` : "/practice") {
     setLeaving(true);
     saveRecording();
     hangUp();

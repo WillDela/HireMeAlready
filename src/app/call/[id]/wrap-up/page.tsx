@@ -124,7 +124,7 @@ function Processing({ historyId, step, hold }: { historyId: string; step: number
         <Link href={`/history/${historyId}`} className="font-semibold underline">
           Go to the file now
         </Link>
-        <Link href="/dashboard" className="font-semibold text-ink-2 underline hover:text-ink">
+        <Link href="/practice" className="font-semibold text-ink-2 underline hover:text-ink">
           Back to Home
         </Link>
       </div>
@@ -171,7 +171,7 @@ export default function WrapUpPage({ params }: { params: Promise<{ id: string }>
   return (
     <div className="desk min-h-dvh">
       <header className="mx-auto flex max-w-2xl px-4 pt-6 text-ink sm:px-0">
-        <Link href="/dashboard" aria-label="hire-me-already, home">
+        <Link href="/practice" aria-label="hire-me-already, home">
           <Wordmark />
         </Link>
       </header>

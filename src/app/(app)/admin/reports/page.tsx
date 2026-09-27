@@ -68,7 +68,7 @@ export default function AdminReportsPage() {
   });
 
   useEffect(() => {
-    if (!currentUser.isAdmin) router.replace("/dashboard");
+    if (!currentUser.isAdmin) router.replace("/practice");
   }, [currentUser.isAdmin, router]);
 
   const items = useMemo(() => (data ?? []).map(fromApi), [data]);

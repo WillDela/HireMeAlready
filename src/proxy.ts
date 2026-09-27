@@ -30,7 +30,6 @@ function tagApiRequest(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/dashboard/:path*",
     "/practice/:path*",
     "/history/:path*",
     "/friends/:path*",

@@ -47,7 +47,7 @@ export function PeerWrapUp({ id }: { id: string }) {
           action={
             <>
               <ButtonLink href="/practice/live">Find someone else</ButtonLink>
-              <ButtonLink href="/dashboard" variant="secondary">
+              <ButtonLink href="/practice" variant="secondary">
                 Back to Home
               </ButtonLink>
             </>
@@ -127,7 +127,7 @@ function AwaitFeedback({ wrapUp }: { wrapUp: WrapUp }) {
       ) : null}
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <ButtonLink href={`/history/${wrapUp.interviewId}`}>{done ? "Read your feedback" : "Go to your interview file"}</ButtonLink>
-        <ButtonLink href="/dashboard" variant="secondary">
+        <ButtonLink href="/practice" variant="secondary">
           Back to Home
         </ButtonLink>
       </div>
