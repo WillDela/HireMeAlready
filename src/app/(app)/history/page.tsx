@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { useRole } from "@/lib/prefs";
 import type { InterviewType } from "@/lib/mock";
 import { useApiResource } from "@/lib/use-api";
 import type { HistoryItem } from "@/lib/views";
@@ -20,10 +21,12 @@ const filters: { value: Filter; label: string }[] = [
 
 export default function HistoryPage() {
   const [filter, setFilter] = useState<Filter>("all");
+  // The top-bar role toggle filters the list to interviews where you had that role.
+  const [role] = useRole();
   const { status, data: items, retry } = useApiResource<HistoryItem[]>("/api/interviews", {
     isEmpty: (d) => d.length === 0,
   });
-  const data = items ?? [];
+  const data = (items ?? []).filter((i) => i.yourRole === role);
   const shown = filter === "all" ? data : data.filter((i) => i.type === filter);
   const scored = data.filter((i) => i.score !== null);
   const avg = scored.reduce((s, i) => s + (i.score ?? 0), 0) / Math.max(1, scored.length);
@@ -35,7 +38,7 @@ export default function HistoryPage() {
         title="History"
         description={
           status === "ready"
-            ? `${data.length} ${data.length === 1 ? "interview" : "interviews"} filed.${scored.length ? ` Average score ${avg.toFixed(1)} across ${scored.length} scored.` : ""}`
+            ? `${data.length} ${data.length === 1 ? "interview" : "interviews"} as the ${role}.${scored.length ? ` Average score ${avg.toFixed(1)} across ${scored.length} scored.` : ""}`
             : "Every practice interview, with its transcript, analysis and feedback."
         }
         actions={
@@ -97,14 +100,24 @@ export default function HistoryPage() {
           </div>
         }
       >
-        {shown.length === 0 ? (
+        {data.length === 0 ? (
           <div className="sheet">
-            <EmptyFolder compact title={`No ${filter === "ai" ? "AI" : "human"} interviews yet`}>
-              Switch the filter to All to see everything.
+            <EmptyFolder compact title={`No interviews as the ${role} yet`}>
+              {role === "interviewer"
+                ? "Interview someone from Practice and it's filed here. Switch to interviewee to see your own interviews."
+                : "Practice with AI or a person and it's filed here. Switch to interviewer to see the interviews you ran."}
+            </EmptyFolder>
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="sheet">
+            <EmptyFolder compact title={`No ${filter === "ai" ? "AI" : "human"} interviews as the ${role}`}>
+              {role === "interviewer" && filter === "ai"
+                ? "The AI is always the interviewer, so AI interviews are under interviewee."
+                : "Switch the filter to All to see everything."}
             </EmptyFolder>
           </div>
         ) : (
-          <InterviewTable interviews={shown} caption={`Past interviews, ${filters.find((f) => f.value === filter)?.label}`} />
+          <InterviewTable interviews={shown} caption={`Past interviews as the ${role}, ${filters.find((f) => f.value === filter)?.label}`} />
         )}
       </StateView>
     </>
